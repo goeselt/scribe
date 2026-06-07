@@ -2,7 +2,7 @@
 
 const fs = require('node:fs')
 const { execFileSync, spawnSync } = require('node:child_process')
-const { parseFiles, buildAddArgs, resolvePushArgs } = require('./commit.js')
+const { parseFiles, buildAddArgs, resolvePushArgs, resolveCommitMessage } = require('./commit.js')
 const { MARKER, buildComment, buildSummary } = require('./comment.js')
 const { upsertComment } = require('./github.js')
 
@@ -121,13 +121,16 @@ function hasChanges() {
   const force = boolInput('FORCE', false)
   const token = input('GITHUB-TOKEN')
   const postComment = boolInput('PR-COMMENT', true)
+  const skipCi = boolInput('SKIP-CI', false)
 
   const eventName = process.env['GITHUB_EVENT_NAME'] ?? ''
   const headRef = process.env['GITHUB_HEAD_REF'] ?? ''
   const repo = process.env['GITHUB_REPOSITORY'] ?? ''
   const payload = eventPayload()
 
-  log(`event=${eventName || '-'} force=${force} signing=${signingKey ? 'yes' : 'no'} pr-comment=${postComment}`)
+  log(
+    `event=${eventName || '-'} force=${force} signing=${signingKey ? 'yes' : 'no'} pr-comment=${postComment} skip-ci=${skipCi}`,
+  )
 
   const files = parseFiles(filesInput)
   if (files.length === 0) throw new Error('files input is empty or contains no valid entries')
@@ -166,7 +169,8 @@ function hasChanges() {
     return
   }
 
-  git(['commit', '-m', message])
+  const commitMessage = resolveCommitMessage(message, skipCi)
+  git(['commit', '-m', commitMessage])
   const sha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
   log(`committed: ${sha}`)
 
@@ -182,7 +186,7 @@ function hasChanges() {
     repo,
     committedAt: git(['show', '-s', '--format=%cI', sha]).trim(),
     files,
-    message,
+    message: commitMessage,
     push: pushArgs.join(' '),
     signing: Boolean(signingKey),
     force,

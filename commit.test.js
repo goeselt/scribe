@@ -2,7 +2,7 @@
 
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { parseFiles, buildAddArgs, resolvePushArgs } = require('./commit.js')
+const { parseFiles, buildAddArgs, resolvePushArgs, resolveCommitMessage } = require('./commit.js')
 
 test('parseFiles splits a newline-separated file list', () => {
   assert.deepEqual(parseFiles('package.json\npackage-lock.json\n'), ['package.json', 'package-lock.json'])
@@ -72,4 +72,20 @@ test('resolvePushArgs falls back to plain push when headRef is empty in a PR con
   // GITHUB_HEAD_REF is always set in practice; empty is a misconfiguration.
   // Fall back gracefully -- the push will fail on detached HEAD, which surfaces the misconfiguration.
   assert.deepEqual(resolvePushArgs('pull_request', ''), ['push'])
+})
+
+test('resolveCommitMessage preserves the message when skip-ci is false', () => {
+  assert.equal(resolveCommitMessage('chore: release v1.0.0', false), 'chore: release v1.0.0')
+})
+
+test('resolveCommitMessage appends [skip ci] when enabled and absent', () => {
+  assert.equal(resolveCommitMessage('chore: release v1.0.0', true), 'chore: release v1.0.0 [skip ci]')
+})
+
+test('resolveCommitMessage does not duplicate [skip ci] when already present', () => {
+  assert.equal(resolveCommitMessage('chore: release v1.0.0 [skip ci]', true), 'chore: release v1.0.0 [skip ci]')
+})
+
+test('resolveCommitMessage preserves [skip ci] anywhere in the message', () => {
+  assert.equal(resolveCommitMessage('[skip ci] chore: release', true), '[skip ci] chore: release')
 })

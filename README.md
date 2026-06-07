@@ -15,11 +15,12 @@ shared PR comment that lists the commits Scribe added to the PR.
     files: |
       package.json
       package-lock.json
-    message: 'chore(version): release v${{ steps.bumpkin.outputs.next-version }} [skip ci]'
+    message: 'chore(version): release v${{ steps.bumpkin.outputs.next-version }}'
     git-user-name: ${{ vars.RELEASE_SIGNING_USER }}
     git-user-email: ${{ vars.RELEASE_SIGNING_EMAIL }}
     signing-key: ${{ secrets.RELEASE_SIGNING_KEY }}
     github-token: ${{ secrets.GITHUB_TOKEN }}
+    skip-ci: true
 ```
 
 For gitignored paths (e.g. `dist/`), set `force: 'true'`:
@@ -31,12 +32,13 @@ For gitignored paths (e.g. `dist/`), set `force: 'true'`:
       dist/
       package.json
       package-lock.json
-    message: 'chore(version): release v${{ steps.bumpkin.outputs.next-version }} [skip ci]'
+    message: 'chore(version): release v${{ steps.bumpkin.outputs.next-version }}'
     git-user-name: ${{ vars.RELEASE_SIGNING_USER }}
     git-user-email: ${{ vars.RELEASE_SIGNING_EMAIL }}
     signing-key: ${{ secrets.RELEASE_SIGNING_KEY }}
-    force: 'true'
+    force: true
     github-token: ${{ secrets.GITHUB_TOKEN }}
+    skip-ci: true
 ```
 
 ## Inputs
@@ -51,6 +53,7 @@ For gitignored paths (e.g. `dist/`), set `force: 'true'`:
 | `force`          | No       | `false` | Pass `--force` to `git add`. Required for gitignored paths.           |
 | `github-token`   | No       | `''`    | Token used to create or update the PR comment on pull_request events. |
 | `pr-comment`     | No       | `true`  | Whether to create or update the explanatory PR comment on PR events.  |
+| `skip-ci`        | No       | `true`  | Whether to append `[skip ci]` to the commit message when absent.      |
 
 ## Outputs
 
@@ -82,11 +85,11 @@ On `pull_request` and `pull_request_target` events, `actions/checkout` lands on 
 (`refs/pull/N/merge`). A plain `git push` would fail. The action detects this and pushes to
 `origin HEAD:refs/heads/<GITHUB_HEAD_REF>` instead.
 
-> [!WARNING]
+> [!NOTE]
 >
 > Pushing from within a `pull_request` workflow using a GitHub App token or PAT triggers a new
-> `pull_request: synchronize` event, which starts a new CI run on the updated commit. Include `[skip ci]` in the commit
-> message to suppress this if the pushed content (e.g. auto-generated files) does not require re-validation.
+> `pull_request: synchronize` event. Set `skip-ci: true` when Scribe commits generated files that do not need another CI
+> run.
 >
 > Pushing with `GITHUB_TOKEN` does **not** trigger new workflow runs, but `GITHUB_TOKEN` cannot bypass branch protection
 > rules.
