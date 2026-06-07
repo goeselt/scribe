@@ -1,0 +1,44 @@
+---
+name: 'Scribe'
+description: 'Stage files, commit, and push -- with optional GPG signing.'
+author: 'goeselt'
+
+inputs:
+  files:
+    description: 'Newline-separated list of files or directories to stage.'
+    required: true
+  message:
+    description: 'Commit message.'
+    required: true
+  git-user-name:
+    description: 'Git author name.'
+    required: true
+  git-user-email:
+    description: 'Git author email.'
+    required: true
+  signing-key:
+    description: 'Base64-encoded GPG signing key. When omitted, commits are unsigned.'
+    required: false
+    default: ''
+  force:
+    description: 'Pass --force to git add. Required for gitignored paths such as dist/.'
+    required: false
+    default: 'false'
+  github-token:
+    description: 'GitHub token used to create or update the PR comment on pull_request events.'
+    required: false
+    default: ''
+  pr-comment:
+    description: 'Whether to create or update the explanatory PR comment on pull_request events.'
+    required: false
+    default: 'true'
+
+outputs:
+  committed:
+    description: "'true' if a commit was created, 'false' if there were no staged changes."
+  sha:
+    description: 'SHA of the new commit. Empty when committed is false.'
+
+runs:
+  using: node24
+  main: index.js
