@@ -71,26 +71,26 @@ function ignore404(err) {
 }
 
 async function upsertComment(token, repo, prNumber, marker, buildBody, ops) {
-  ops = ops ?? makeOps(token, repo, prNumber)
+  const client = ops ?? makeOps(token, repo, prNumber)
   let written = null
 
   for (let attempt = 0; attempt < 3; attempt++) {
-    const comments = await ops.find(marker)
+    const comments = await client.find(marker)
     const keeper = comments[0] ?? null
     const body = buildBody(comments.map((c) => c.body))
 
     if (keeper) {
-      written = normalize(keeper.body) === normalize(body) ? keeper : await ops.update(keeper.id, body)
+      written = normalize(keeper.body) === normalize(body) ? keeper : await client.update(keeper.id, body)
     } else {
-      written = await ops.create(body)
+      written = await client.create(body)
     }
 
     for (const duplicate of comments.slice(1)) {
-      await ops.del(duplicate.id).catch(ignore404)
+      await client.del(duplicate.id).catch(ignore404)
     }
 
-    await ops.delay(250 * (attempt + 1))
-    const synced = await ops.find(marker)
+    await client.delay(250 * (attempt + 1))
+    const synced = await client.find(marker)
     if (synced.length === 1 && normalize(buildBody(synced.map((c) => c.body))) === normalize(synced[0].body)) {
       return synced[0]
     }

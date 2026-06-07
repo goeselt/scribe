@@ -32,6 +32,10 @@ inputs:
     description: 'Whether to create or update the explanatory PR comment on pull_request events.'
     required: false
     default: 'true'
+  skip-ci:
+    description: 'Whether to append [skip ci] to the created commit message when absent.'
+    required: false
+    default: 'true'
 
 outputs:
   committed:

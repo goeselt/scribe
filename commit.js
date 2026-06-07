@@ -32,4 +32,11 @@ function resolvePushArgs(eventName, headRef) {
   return ['push']
 }
 
-module.exports = { parseFiles, buildAddArgs, resolvePushArgs }
+// resolveCommitMessage optionally appends [skip ci] to prevent pushed commits
+// from triggering follow-up workflow runs.
+function resolveCommitMessage(message, skipCi) {
+  if (!skipCi || message.includes('[skip ci]')) return message
+  return `${message} [skip ci]`
+}
+
+module.exports = { parseFiles, buildAddArgs, resolvePushArgs, resolveCommitMessage }

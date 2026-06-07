@@ -102,7 +102,8 @@ test('buildComment renders a linked commit SHA when repo is present', () => {
 })
 
 test('buildComment renders a plain SHA when repo is absent', () => {
-  const { repo: _repo, ...noRepoRecord } = versionRecord
+  const noRepoRecord = { ...versionRecord }
+  delete noRepoRecord.repo
   const comment = buildComment('', noRepoRecord)
   assert.ok(comment.includes('1234567 committed 2 files'))
   assert.ok(!comment.includes('github.com'))
