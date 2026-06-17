@@ -108,3 +108,30 @@ test('buildComment renders a plain SHA when repo is absent', () => {
   assert.ok(comment.includes('1234567 committed 2 files'))
   assert.ok(!comment.includes('github.com'))
 })
+
+test('parseRecords silently ignores valid base64 that decodes to invalid JSON', () => {
+  const encoded = Buffer.from('not valid json', 'utf8').toString('base64')
+  assert.deepEqual(parseRecords(`<!-- scribe-records: ${encoded} -->`), [])
+})
+
+test('parseRecords silently ignores valid base64 that decodes to a non-array', () => {
+  const encoded = Buffer.from(JSON.stringify({ not: 'an array' }), 'utf8').toString('base64')
+  assert.deepEqual(parseRecords(`<!-- scribe-records: ${encoded} -->`), [])
+})
+
+test('parseRecords filters out records that are missing a string sha', () => {
+  const encoded = Buffer.from(
+    JSON.stringify([{ sha: 123 }, { noSha: true }, null, { sha: 'abc123' }]),
+    'utf8',
+  ).toString('base64')
+  const records = parseRecords(`<!-- scribe-records: ${encoded} -->`)
+  assert.deepEqual(
+    records.map((r) => r.sha),
+    ['abc123'],
+  )
+})
+
+test('parseRecords returns an empty array when the marker is absent', () => {
+  assert.deepEqual(parseRecords('no marker here'), [])
+  assert.deepEqual(parseRecords(''), [])
+})

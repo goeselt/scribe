@@ -25,8 +25,25 @@ function buildAddArgs(files, force) {
 // Note: pushing with a GitHub App token or PAT triggers a new pull_request
 // workflow run on the PR branch. Include [skip ci] in the commit message to
 // suppress redundant CI on the pushed commit.
-function resolvePushArgs(eventName, headRef) {
-  if ((eventName === 'pull_request' || eventName === 'pull_request_target') && headRef) {
+function isPREvent(eventName) {
+  return eventName === 'pull_request' || eventName === 'pull_request_target'
+}
+
+function resolvePushArgs(eventName, headRef, payload = {}) {
+  if (isPREvent(eventName)) {
+    const repo = payload.repository?.full_name
+    const headRepo = payload.pull_request?.head?.repo?.full_name
+
+    if (!headRef) throw new Error('GITHUB_HEAD_REF is empty for a pull_request event')
+    if (!repo || !headRepo) {
+      throw new Error('pull_request payload is missing repository or head repository information')
+    }
+    if (headRepo !== repo) {
+      throw new Error(
+        'Scribe can only push to pull request branches from the same repository; fork pull requests are not supported',
+      )
+    }
+
     return ['push', 'origin', `HEAD:refs/heads/${headRef}`]
   }
   return ['push']

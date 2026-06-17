@@ -4,6 +4,11 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const { parseFiles, buildAddArgs, resolvePushArgs, resolveCommitMessage } = require('./commit.js')
 
+const sameRepoPRPayload = {
+  repository: { full_name: 'owner/repo' },
+  pull_request: { head: { repo: { full_name: 'owner/repo' } } },
+}
+
 test('parseFiles splits a newline-separated file list', () => {
   assert.deepEqual(parseFiles('package.json\npackage-lock.json\n'), ['package.json', 'package-lock.json'])
 })
@@ -53,7 +58,7 @@ test('resolvePushArgs returns plain push on workflow_dispatch', () => {
 })
 
 test('resolvePushArgs pushes to the PR branch head ref on pull_request', () => {
-  assert.deepEqual(resolvePushArgs('pull_request', 'feature-branch'), [
+  assert.deepEqual(resolvePushArgs('pull_request', 'feature-branch', sameRepoPRPayload), [
     'push',
     'origin',
     'HEAD:refs/heads/feature-branch',
@@ -61,17 +66,36 @@ test('resolvePushArgs pushes to the PR branch head ref on pull_request', () => {
 })
 
 test('resolvePushArgs pushes to the PR branch head ref on pull_request_target', () => {
-  assert.deepEqual(resolvePushArgs('pull_request_target', 'fix/something'), [
+  assert.deepEqual(resolvePushArgs('pull_request_target', 'fix/something', sameRepoPRPayload), [
     'push',
     'origin',
     'HEAD:refs/heads/fix/something',
   ])
 })
 
-test('resolvePushArgs falls back to plain push when headRef is empty in a PR context', () => {
-  // GITHUB_HEAD_REF is always set in practice; empty is a misconfiguration.
-  // Fall back gracefully -- the push will fail on detached HEAD, which surfaces the misconfiguration.
-  assert.deepEqual(resolvePushArgs('pull_request', ''), ['push'])
+test('resolvePushArgs fails when headRef is empty in a PR context', () => {
+  assert.throws(
+    () => resolvePushArgs('pull_request', '', sameRepoPRPayload),
+    /GITHUB_HEAD_REF is empty for a pull_request event/,
+  )
+})
+
+test('resolvePushArgs fails when pull_request payload is incomplete', () => {
+  assert.throws(
+    () => resolvePushArgs('pull_request', 'feature-branch', {}),
+    /pull_request payload is missing repository or head repository information/,
+  )
+})
+
+test('resolvePushArgs rejects fork pull requests', () => {
+  assert.throws(
+    () =>
+      resolvePushArgs('pull_request', 'feature-branch', {
+        repository: { full_name: 'owner/repo' },
+        pull_request: { head: { repo: { full_name: 'contributor/repo' } } },
+      }),
+    /fork pull requests are not supported/,
+  )
 })
 
 test('resolveCommitMessage preserves the message when skip-ci is false', () => {

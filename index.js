@@ -10,12 +10,19 @@ function log(message) {
   process.stdout.write(`[scribe] ${message}\n`)
 }
 
+function escapeWorkflowCommandValue(value) {
+  return String(value ?? '')
+    .replace(/%/g, '%25')
+    .replace(/\r/g, '%0D')
+    .replace(/\n/g, '%0A')
+}
+
 function fail(message) {
-  process.stdout.write(`::error title=Scribe::${message}\n`)
+  process.stdout.write(`::error title=Scribe::${escapeWorkflowCommandValue(message)}\n`)
 }
 
 function warn(message) {
-  process.stdout.write(`::warning title=Scribe::${message}\n`)
+  process.stdout.write(`::warning title=Scribe::${escapeWorkflowCommandValue(message)}\n`)
 }
 
 function input(name) {
@@ -55,7 +62,7 @@ function writeSummary(record) {
   log('summary=written')
 }
 
-async function writePRComment({ eventName, payload, token, postComment, record }) {
+async function writePRComment({ eventName, payload, token, postComment, record, authorLoginHint }) {
   if (!isPREvent(eventName)) {
     log('comment=skipped reason=not-pr')
     return
@@ -79,7 +86,15 @@ async function writePRComment({ eventName, payload, token, postComment, record }
   }
 
   try {
-    await upsertComment(token, repo, pr.number, MARKER, (existingBody) => buildComment(existingBody, record))
+    await upsertComment(
+      token,
+      repo,
+      pr.number,
+      MARKER,
+      (existingBody) => buildComment(existingBody, record),
+      undefined,
+      authorLoginHint,
+    )
     log('comment=updated')
   } catch (err) {
     warn(`could not post PR comment: ${err.message}`)
@@ -112,7 +127,17 @@ function hasChanges() {
   }
 }
 
-;(async () => {
+function rollbackCommit(sha) {
+  const current = git(['rev-parse', 'HEAD']).trim()
+  if (current !== sha) {
+    warn(`could not roll back local commit ${sha}: HEAD moved to ${current}`)
+    return
+  }
+  git(['reset', '--mixed', 'HEAD~1'])
+  log(`rolled back local commit: ${sha}`)
+}
+
+async function main() {
   const filesInput = input('FILES')
   const message = input('MESSAGE')
   const userName = input('GIT-USER-NAME')
@@ -121,7 +146,7 @@ function hasChanges() {
   const force = boolInput('FORCE', false)
   const token = input('GITHUB-TOKEN')
   const postComment = boolInput('PR-COMMENT', true)
-  const skipCi = boolInput('SKIP-CI', false)
+  const skipCi = boolInput('SKIP-CI', true)
 
   const eventName = process.env['GITHUB_EVENT_NAME'] ?? ''
   const headRef = process.env['GITHUB_HEAD_REF'] ?? ''
@@ -137,6 +162,7 @@ function hasChanges() {
   if (!message.trim()) throw new Error('message input is empty')
   if (!userName.trim()) throw new Error('git-user-name input is empty')
   if (!userEmail.trim()) throw new Error('git-user-email input is empty')
+  const pushArgs = resolvePushArgs(eventName, headRef, payload)
 
   git(['config', 'user.name', userName])
   git(['config', 'user.email', userEmail])
@@ -174,8 +200,16 @@ function hasChanges() {
   const sha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
   log(`committed: ${sha}`)
 
-  const pushArgs = resolvePushArgs(eventName, headRef)
-  git(pushArgs)
+  try {
+    git(pushArgs)
+  } catch (err) {
+    try {
+      rollbackCommit(sha)
+    } catch (rollbackErr) {
+      warn(`could not roll back local commit ${sha}: ${rollbackErr.message}`)
+    }
+    throw err
+  }
   log(`pushed (${pushArgs.join(' ')})`)
 
   setOutput('committed', 'true')
@@ -192,9 +226,15 @@ function hasChanges() {
     force,
   }
   writeSummary(record)
-  await writePRComment({ eventName, payload, token, postComment, record })
+  await writePRComment({ eventName, payload, token, postComment, record, authorLoginHint: userName })
   log(`result=done committed=true sha=${sha}`)
-})().catch((err) => {
-  fail(err.message)
-  process.exit(1)
-})
+}
+
+if (require.main === module) {
+  main().catch((err) => {
+    fail(err.message)
+    process.exit(1)
+  })
+}
+
+module.exports = { escapeWorkflowCommandValue, fail, warn, boolInput, main }

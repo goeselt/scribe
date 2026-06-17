@@ -1,7 +1,11 @@
 ---
-name: 'Scribe'
+name: 'Scribe - Stage, Commit & Push'
 description: 'Stage files, commit, and push -- with optional GPG signing.'
 author: 'goeselt'
+
+branding:
+  icon: feather
+  color: blue
 
 inputs:
   files:
