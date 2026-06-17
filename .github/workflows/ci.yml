@@ -25,19 +25,24 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - name: Validate PR Title
-        uses: goeselt/bumpkin@8e5d31105440aa42cd53d50b22c954be38bc2dd0 # v1.0.1
+      - name: Validate Intent
+        uses: goeselt/intent@d168da88e1330163fb8943b119685d2af453fd8d # v1.0.2
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
+      # The `edited` trigger fires on PR title/body changes (needed to re-validate intent) but touches no code,
+      # so skip everything else in that case.
       - name: Checkout
+        if: github.event.action != 'edited'
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 1
           persist-credentials: false
 
       - name: Run Tests
+        if: github.event.action != 'edited'
         run: npm test
 
       - name: Pedant
+        if: github.event.action != 'edited'
         uses: goeselt/pedant@28d06edbaa661680d1488f46daae7b64c2766f31 # v1.0.2

@@ -67,6 +67,9 @@ For gitignored paths (e.g. `dist/`), set `force: 'true'`:
 Scribe appends a workflow summary entry after each invocation, including the result, files, commit SHA, push target,
 signing mode, and force-add mode.
 
+If Scribe creates a commit but the push fails, it rolls back the local commit before failing the step. The generated
+files remain in the workspace for logs or follow-up diagnostics.
+
 On `pull_request` and `pull_request_target` events, Scribe can also create or update one shared PR comment. Pass a token
 with `pull-requests: write` permission:
 
@@ -84,6 +87,9 @@ first. Runs that produce no commit are reported in the workflow summary only.
 On `pull_request` and `pull_request_target` events, `actions/checkout` lands on a detached merge-commit
 (`refs/pull/N/merge`). A plain `git push` would fail. The action detects this and pushes to
 `origin HEAD:refs/heads/<GITHUB_HEAD_REF>` instead.
+
+Scribe only supports this mode for pull requests whose source branch lives in the same repository as the target branch.
+Fork pull requests are rejected before files are staged or committed.
 
 > [!NOTE]
 >
