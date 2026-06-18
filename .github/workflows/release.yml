@@ -54,6 +54,7 @@ jobs:
         with:
           files: package.json
           message: 'chore: release ${{ steps.intent.outputs.release-tag }}'
+          github-token: ${{ steps.app.outputs.token }}
           git-user-name: ${{ vars.RELEASE_SIGNING_USER }}
           git-user-email: ${{ vars.RELEASE_SIGNING_EMAIL }}
           signing-key: ${{ secrets.RELEASE_SIGNING_KEY }}
