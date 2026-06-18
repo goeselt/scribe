@@ -54,6 +54,8 @@ Fork PRs are rejected before staging files. Detached merge checkouts are rejecte
 
 - Input changes: update `action.yml`, `README.md`, `inputs.js`, and `inputs.test.js`.
 - Git command behavior: update `git.js` and add or adjust `git.test.js`.
+- Git authentication behavior: keep `github-token` scoped to the push operation and clean up temporary helpers before
+  the action exits.
 - PR push behavior: update `commit.js`, `commit.test.js`, and the README's pull request section.
 - Summary or PR comment output: update `comment.js`, `comment.test.js`, and screenshots/examples if any are added later.
 - GitHub API behavior: update `github.js` and `github.test.js`.

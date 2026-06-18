@@ -2,7 +2,7 @@
 
 const fs = require('node:fs')
 const { readInputs } = require('./inputs.js')
-const { git, hasChanges, validateBranchRef, rollbackCommit, enableSigning } = require('./git.js')
+const { git, gitPush, hasChanges, validateBranchRef, rollbackCommit, enableSigning } = require('./git.js')
 const {
   parseFiles,
   buildAddArgs,
@@ -126,7 +126,7 @@ async function main() {
     log(`committed: ${sha}`)
 
     try {
-      git(pushArgs)
+      gitPush(pushArgs, inputs.token)
     } catch (err) {
       try {
         rollbackCommit(sha, warn, log)
