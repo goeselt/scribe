@@ -102,7 +102,12 @@ permissions:
 
 When Scribe runs more than once, every created commit is merged into the same PR comment. The newest commit is listed
 first. Scribe keeps the newest 50 commit records in the shared comment. Runs that produce no commit are reported in the
-workflow summary only.
+workflow summary only. The hidden comment state is also size-limited, so very large file lists or commit messages are
+shortened in the comment history.
+
+When the GitHub API cannot return the authenticated login for the comment token, Scribe only trusts a fallback author
+hint that looks like a bot login, such as `github-actions[bot]`. This keeps a custom Git author name from deciding which
+existing PR comments may be updated.
 
 ## Pull Request Context
 

@@ -40,12 +40,12 @@ function limited(value, maxLen) {
   return text.length > maxLen ? text.slice(0, maxLen) : text
 }
 
-function storedFiles(files) {
+function normalizeFilesForStorage(files) {
   if (!Array.isArray(files)) return []
   return files.map((f) => limited(f, MAX_STORED_FILE_LENGTH)).filter(Boolean).slice(0, MAX_STORED_FILES)
 }
 
-function storedRecord(record) {
+function normalizeRecordForStorage(record) {
   const sha = clean(record?.sha)
   if (!SHA_RE.test(sha)) return null
 
@@ -55,7 +55,7 @@ function storedRecord(record) {
     sha,
     ...(REPO_RE.test(repo) ? { repo } : {}),
     committedAt: limited(record?.committedAt, 40),
-    files: storedFiles(record?.files),
+    files: normalizeFilesForStorage(record?.files),
     message: limited(record?.message, MAX_STORED_MESSAGE_LENGTH),
     push: limited(record?.push, MAX_STORED_PUSH_LENGTH),
     signing: Boolean(record?.signing),
@@ -73,7 +73,7 @@ function parseRecords(body) {
 
     try {
       const parsed = JSON.parse(Buffer.from(match[1], 'base64').toString('utf8'))
-      if (Array.isArray(parsed)) records.push(...parsed.map(storedRecord).filter(Boolean))
+      if (Array.isArray(parsed)) records.push(...parsed.map(normalizeRecordForStorage).filter(Boolean))
     } catch {
       // Ignore malformed hidden state; visible Markdown remains informational.
     }
@@ -123,7 +123,7 @@ function commentTable(records) {
 }
 
 function buildComment(existingBody, record) {
-  const next = storedRecord(record)
+  const next = normalizeRecordForStorage(record)
   if (!next) throw new Error('comment record is missing a valid commit sha')
 
   const records = sortRecords(upsertRecord(parseRecords(existingBody), next)).slice(0, MAX_COMMENT_RECORDS)

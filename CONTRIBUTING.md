@@ -58,7 +58,9 @@ Fork PRs are rejected before staging files. Detached merge checkouts are rejecte
 - Summary or PR comment output: update `comment.js`, `comment.test.js`, and screenshots/examples if any are added later.
 - GitHub API behavior: update `github.js` and `github.test.js`.
 - Comment history behavior: keep the shared PR comment bounded; `comment.js` intentionally retains only the newest
-  records.
+  records and stores shortened hidden records so the comment body stays predictable.
+- Comment author fallback behavior: keep it conservative. If `/user` cannot confirm the token owner, only bot-style
+  login hints should be trusted for matching existing comments.
 
 ## Local Verification
 
