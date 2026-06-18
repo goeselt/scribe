@@ -2,11 +2,18 @@
 
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { parseFiles, buildAddArgs, resolvePushArgs, resolveCommitMessage } = require('./commit.js')
+const {
+  parseFiles,
+  buildAddArgs,
+  buildCommitArgs,
+  resolvePushArgs,
+  validatePRCheckout,
+  resolveCommitMessage,
+} = require('./commit.js')
 
 const sameRepoPRPayload = {
   repository: { full_name: 'owner/repo' },
-  pull_request: { head: { repo: { full_name: 'owner/repo' } } },
+  pull_request: { head: { ref: 'feature-branch', sha: 'abc123', repo: { full_name: 'owner/repo' } } },
 }
 
 test('parseFiles splits a newline-separated file list', () => {
@@ -49,6 +56,10 @@ test('buildAddArgs uses -- separator to prevent files from being parsed as flags
   assert.equal(args[args.indexOf('-strange-filename') - 1], '--')
 })
 
+test('buildCommitArgs disables repository hooks', () => {
+  assert.deepEqual(buildCommitArgs('chore: update'), ['commit', '--no-verify', '-m', 'chore: update'])
+})
+
 test('resolvePushArgs returns plain push on push events', () => {
   assert.deepEqual(resolvePushArgs('push', ''), ['push'])
 })
@@ -66,10 +77,27 @@ test('resolvePushArgs pushes to the PR branch head ref on pull_request', () => {
 })
 
 test('resolvePushArgs pushes to the PR branch head ref on pull_request_target', () => {
-  assert.deepEqual(resolvePushArgs('pull_request_target', 'fix/something', sameRepoPRPayload), [
+  assert.deepEqual(
+    resolvePushArgs('pull_request_target', 'fix/something', {
+      repository: { full_name: 'owner/repo' },
+      pull_request: { head: { ref: 'fix/something', sha: 'abc123', repo: { full_name: 'owner/repo' } } },
+    }),
+    ['push', 'origin', 'HEAD:refs/heads/fix/something'],
+  )
+})
+
+test('resolvePushArgs fails when GITHUB_HEAD_REF differs from the payload head ref', () => {
+  assert.throws(
+    () => resolvePushArgs('pull_request', 'different-branch', sameRepoPRPayload),
+    /GITHUB_HEAD_REF does not match pull_request.head.ref/,
+  )
+})
+
+test('resolvePushArgs uses the payload head ref as the push target', () => {
+  assert.deepEqual(resolvePushArgs('pull_request', 'feature-branch', sameRepoPRPayload), [
     'push',
     'origin',
-    'HEAD:refs/heads/fix/something',
+    'HEAD:refs/heads/feature-branch',
   ])
 })
 
@@ -83,7 +111,7 @@ test('resolvePushArgs fails when headRef is empty in a PR context', () => {
 test('resolvePushArgs fails when pull_request payload is incomplete', () => {
   assert.throws(
     () => resolvePushArgs('pull_request', 'feature-branch', {}),
-    /pull_request payload is missing repository or head repository information/,
+    /pull_request payload is missing repository or head branch information/,
   )
 })
 
@@ -92,9 +120,36 @@ test('resolvePushArgs rejects fork pull requests', () => {
     () =>
       resolvePushArgs('pull_request', 'feature-branch', {
         repository: { full_name: 'owner/repo' },
-        pull_request: { head: { repo: { full_name: 'contributor/repo' } } },
+        pull_request: { head: { ref: 'feature-branch', sha: 'abc123', repo: { full_name: 'contributor/repo' } } },
       }),
     /fork pull requests are not supported/,
+  )
+})
+
+test('validatePRCheckout accepts the pull request head SHA', () => {
+  assert.doesNotThrow(() => validatePRCheckout('pull_request', sameRepoPRPayload, 'abc123'))
+})
+
+test('validatePRCheckout ignores non-PR events', () => {
+  assert.doesNotThrow(() => validatePRCheckout('push', {}, 'anything'))
+})
+
+test('validatePRCheckout rejects a checkout that is not the pull request head', () => {
+  assert.throws(
+    () => validatePRCheckout('pull_request_target', sameRepoPRPayload, 'merge123'),
+    /must run from the pull request head commit/,
+  )
+})
+
+test('validatePRCheckout fails when the payload is missing the head SHA', () => {
+  assert.throws(
+    () =>
+      validatePRCheckout(
+        'pull_request',
+        { repository: { full_name: 'owner/repo' }, pull_request: { head: { ref: 'feature-branch' } } },
+        'abc123',
+      ),
+    /missing head SHA/,
   )
 })
 

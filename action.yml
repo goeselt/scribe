@@ -1,6 +1,6 @@
 ---
 name: 'Scribe - Stage, Commit & Push'
-description: 'Stage files, commit, and push -- with optional GPG signing.'
+description: 'Stage files, commit, and push with optional GPG signing.'
 author: 'goeselt'
 
 branding:
@@ -15,11 +15,13 @@ inputs:
     description: 'Commit message.'
     required: true
   git-user-name:
-    description: 'Git author name.'
-    required: true
+    description: 'Git author name. Defaults to github-actions[bot].'
+    required: false
+    default: 'github-actions[bot]'
   git-user-email:
-    description: 'Git author email.'
-    required: true
+    description: 'Git author email. Defaults to the github-actions[bot] noreply address.'
+    required: false
+    default: '41898282+github-actions[bot]@users.noreply.github.com'
   signing-key:
     description: 'Base64-encoded GPG signing key. When omitted, commits are unsigned.'
     required: false

@@ -2,7 +2,7 @@
 
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { MARKER, buildComment, buildSummary, parseRecords, upsertRecord } = require('./comment.js')
+const { MARKER, MAX_COMMENT_RECORDS, buildComment, buildSummary, parseRecords, upsertRecord } = require('./comment.js')
 
 const versionRecord = {
   committed: true,
@@ -85,14 +85,44 @@ test('buildComment merges records from duplicate existing comments', () => {
   )
 })
 
+test('buildComment keeps only the newest records', () => {
+  let comment = ''
+
+  for (let i = 0; i < MAX_COMMENT_RECORDS + 5; i++) {
+    const id = String(i).padStart(2, '0')
+    comment = buildComment(comment, {
+      ...versionRecord,
+      sha: String(i).padStart(40, '0'),
+      committedAt: `2026-06-07T12:${id}:00+00:00`,
+      message: `commit ${id}`,
+    })
+  }
+
+  const records = parseRecords(comment)
+  assert.equal(records.length, MAX_COMMENT_RECORDS)
+  assert.equal(records[0].sha, String(MAX_COMMENT_RECORDS + 4).padStart(40, '0'))
+  assert.equal(records.at(-1).sha, String(5).padStart(40, '0'))
+  assert.equal(
+    records.some((r) => r.sha === String(0).padStart(40, '0')),
+    false,
+  )
+})
+
 test('buildSummary renders committed and skipped records', () => {
   const committed = buildSummary(versionRecord)
   const skipped = buildSummary(skippedRecord)
 
   assert.ok(committed.includes('`committed`'))
-  assert.ok(committed.includes('`1234567890abcdef`'))
-  assert.ok(skipped.includes('`skipped`'))
+  assert.ok(committed.includes('[1234567890abcdef](https://github.com/owner/repo/commit/1234567890abcdef)'))
+  assert.ok(skipped.includes('`skipped - no staged changes`'))
   assert.ok(skipped.includes('`dist/`'))
+})
+
+test('buildSummary renders a plain SHA when repo is absent', () => {
+  const noRepoRecord = { ...versionRecord }
+  delete noRepoRecord.repo
+
+  assert.ok(buildSummary(noRepoRecord).includes('`1234567890abcdef`'))
 })
 
 test('buildComment renders a linked commit SHA when repo is present', () => {
@@ -119,16 +149,51 @@ test('parseRecords silently ignores valid base64 that decodes to a non-array', (
   assert.deepEqual(parseRecords(`<!-- scribe-records: ${encoded} -->`), [])
 })
 
-test('parseRecords filters out records that are missing a string sha', () => {
+test('buildComment stores bounded hidden records', () => {
+  const comment = buildComment('', {
+    ...versionRecord,
+    files: Array.from({ length: 60 }, (_, i) => `very-long-file-${i}-${'x'.repeat(200)}.js`),
+    message: 'm'.repeat(1000),
+    push: 'p'.repeat(500),
+  })
+  const [record] = parseRecords(comment)
+
+  assert.equal(record.files.length, 50)
+  assert.equal(record.files[0].length, 120)
+  assert.equal(record.message.length, 500)
+  assert.equal(record.push.length, 160)
+})
+
+test('parseRecords filters out records that are missing a valid sha', () => {
   const encoded = Buffer.from(
-    JSON.stringify([{ sha: 123 }, { noSha: true }, null, { sha: 'abc123' }]),
+    JSON.stringify([{ sha: 123 }, { noSha: true }, null, { sha: 'not-a-sha' }, { sha: 'abc1234' }]),
     'utf8',
   ).toString('base64')
   const records = parseRecords(`<!-- scribe-records: ${encoded} -->`)
   assert.deepEqual(
     records.map((r) => r.sha),
-    ['abc123'],
+    ['abc1234'],
   )
+})
+
+test('parseRecords normalizes oversized hidden records from existing comments', () => {
+  const encoded = Buffer.from(
+    JSON.stringify([
+      {
+        sha: 'fedcba9876543210',
+        repo: 'owner/repo',
+        files: ['x'.repeat(500)],
+        message: 'm'.repeat(1000),
+        push: 'p'.repeat(500),
+      },
+    ]),
+    'utf8',
+  ).toString('base64')
+  const [record] = parseRecords(`<!-- scribe-records: ${encoded} -->`)
+
+  assert.equal(record.files[0].length, 120)
+  assert.equal(record.message.length, 500)
+  assert.equal(record.push.length, 160)
 })
 
 test('parseRecords returns an empty array when the marker is absent', () => {

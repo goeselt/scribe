@@ -16,11 +16,17 @@ function buildAddArgs(files, force) {
   return ['add', '--', ...files]
 }
 
+// buildCommitArgs disables repository hooks so an earlier workflow step cannot
+// inject code into Scribe's commit operation through core.hooksPath.
+function buildCommitArgs(message) {
+  return ['commit', '--no-verify', '-m', message]
+}
+
 // resolvePushArgs returns git-push arguments appropriate for the event context.
 //
-// On pull_request and pull_request_target events, actions/checkout lands on a
-// detached merge-commit (refs/pull/N/merge). A plain `git push` would fail
-// because that ref is read-only. Push to the actual PR branch head ref instead.
+// On pull_request and pull_request_target events, push to the actual PR branch
+// head ref after the entry point verifies that the local checkout is the PR
+// head commit rather than a detached merge commit.
 //
 // Note: pushing with a GitHub App token or PAT triggers a new pull_request
 // workflow run on the PR branch. Include [skip ci] in the commit message to
@@ -33,20 +39,37 @@ function resolvePushArgs(eventName, headRef, payload = {}) {
   if (isPREvent(eventName)) {
     const repo = payload.repository?.full_name
     const headRepo = payload.pull_request?.head?.repo?.full_name
+    const payloadHeadRef = payload.pull_request?.head?.ref
 
     if (!headRef) throw new Error('GITHUB_HEAD_REF is empty for a pull_request event')
-    if (!repo || !headRepo) {
-      throw new Error('pull_request payload is missing repository or head repository information')
+    if (!repo || !headRepo || !payloadHeadRef) {
+      throw new Error('pull_request payload is missing repository or head branch information')
     }
     if (headRepo !== repo) {
       throw new Error(
         'Scribe can only push to pull request branches from the same repository; fork pull requests are not supported',
       )
     }
+    if (headRef !== payloadHeadRef) {
+      throw new Error('GITHUB_HEAD_REF does not match pull_request.head.ref')
+    }
 
-    return ['push', 'origin', `HEAD:refs/heads/${headRef}`]
+    return ['push', 'origin', `HEAD:refs/heads/${payloadHeadRef}`]
   }
   return ['push']
+}
+
+function validatePRCheckout(eventName, payload = {}, currentSha = '') {
+  if (!isPREvent(eventName)) return
+
+  const headSha = payload.pull_request?.head?.sha
+  if (!headSha) throw new Error('pull_request payload is missing head SHA information')
+  if (!currentSha) throw new Error('current Git HEAD is empty')
+  if (currentSha !== headSha) {
+    throw new Error(
+      'Scribe must run from the pull request head commit; check out pull_request.head.sha before committing',
+    )
+  }
 }
 
 // resolveCommitMessage optionally appends [skip ci] to prevent pushed commits
@@ -56,4 +79,11 @@ function resolveCommitMessage(message, skipCi) {
   return `${message} [skip ci]`
 }
 
-module.exports = { parseFiles, buildAddArgs, resolvePushArgs, resolveCommitMessage }
+module.exports = {
+  parseFiles,
+  buildAddArgs,
+  buildCommitArgs,
+  resolvePushArgs,
+  validatePRCheckout,
+  resolveCommitMessage,
+}

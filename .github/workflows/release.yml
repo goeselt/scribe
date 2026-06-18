@@ -34,10 +34,11 @@ jobs:
         with:
           fetch-depth: 0 # intent release needs full history to find the previous release tag
           token: ${{ steps.app.outputs.token }}
+          persist-credentials: false
 
       - id: intent
         name: Intent Release
-        uses: goeselt/intent@d168da88e1330163fb8943b119685d2af453fd8d # v1.0.2
+        uses: goeselt/intent@f6d867043c166cdbe5c9be0ee2fbee84f2065415 # v1.1.0
         with:
           initial-version: '1.0.0'
 

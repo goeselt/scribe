@@ -1,8 +1,10 @@
 'use strict'
 
+const { EventEmitter } = require('node:events')
+const https = require('node:https')
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { upsertComment, normalizeLoginHint, authenticatedLogin, listComments } = require('./github.js')
+const { upsertComment, normalizeLoginHint, authenticatedLogin, listComments, request } = require('./github.js')
 const { MARKER, buildComment, parseRecords } = require('./comment.js')
 
 const recordA = {
@@ -228,6 +230,11 @@ test('authenticatedLogin falls back to the hint on a 4xx response', async () => 
   assert.equal(await authenticatedLogin('token', 'my-app[bot]', mockRequest), 'my-app[bot]')
 })
 
+test('authenticatedLogin does not use a plain username as an unverified fallback', async () => {
+  const mockRequest = () => Promise.reject(new Error('GitHub API GET /user --> HTTP 403: forbidden'))
+  assert.equal(await authenticatedLogin('token', 'octocat', mockRequest), '')
+})
+
 test('authenticatedLogin rethrows non-4xx errors', async () => {
   const mockRequest = () => Promise.reject(new Error('GitHub API GET /user --> HTTP 503: unavailable'))
   await assert.rejects(() => authenticatedLogin('token', 'fallback', mockRequest), /HTTP 503/)
@@ -261,4 +268,38 @@ test('listComments returns an empty array when the first page is empty', async (
   const mockRequest = () => Promise.resolve([])
   const result = await listComments('token', 'owner/repo', 1, mockRequest)
   assert.deepEqual(result, [])
+})
+
+test('request times out stalled GitHub API calls', async () => {
+  const originalRequest = https.request
+  let timeoutMs = 0
+  let destroyedWith = null
+
+  https.request = () => {
+    const req = new EventEmitter()
+    let onTimeout = () => {}
+
+    req.setTimeout = (ms, callback) => {
+      timeoutMs = ms
+      onTimeout = callback
+      return req
+    }
+    req.destroy = (err) => {
+      destroyedWith = err
+      req.emit('error', err)
+      return req
+    }
+    req.end = () => onTimeout()
+    req.write = () => {}
+
+    return req
+  }
+
+  try {
+    await assert.rejects(() => request('GET', '/slow', 'token'), /timed out after 10000ms/)
+    assert.equal(timeoutMs, 10000)
+    assert.match(destroyedWith.message, /timed out after 10000ms/)
+  } finally {
+    https.request = originalRequest
+  }
 })

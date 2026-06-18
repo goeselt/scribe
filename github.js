@@ -2,6 +2,8 @@
 
 const https = require('node:https')
 
+const DEFAULT_TIMEOUT_MS = 10000
+
 function request(method, path, token, body) {
   return new Promise((resolve, reject) => {
     const payload = body ? JSON.stringify(body) : undefined
@@ -40,6 +42,9 @@ function request(method, path, token, body) {
     })
 
     req.on('error', reject)
+    req.setTimeout(DEFAULT_TIMEOUT_MS, () => {
+      req.destroy(new Error(`GitHub API ${method} ${path} timed out after ${DEFAULT_TIMEOUT_MS}ms`))
+    })
     if (payload) req.write(payload)
     req.end()
   })
@@ -64,12 +69,17 @@ function normalizeLoginHint(value) {
   return ''
 }
 
+function normalizeBotLoginHint(value) {
+  const login = normalizeLoginHint(value)
+  return login.endsWith('[bot]') ? login : ''
+}
+
 async function authenticatedLogin(token, fallbackLogin = '', _request = request) {
   try {
     const viewer = await _request('GET', '/user', token)
-    return typeof viewer?.login === 'string' ? viewer.login : normalizeLoginHint(fallbackLogin)
+    return typeof viewer?.login === 'string' ? viewer.login : normalizeBotLoginHint(fallbackLogin)
   } catch (err) {
-    if (/HTTP 4\d\d/.test(err.message)) return normalizeLoginHint(fallbackLogin)
+    if (/HTTP 4\d\d/.test(err.message)) return normalizeBotLoginHint(fallbackLogin)
     throw err
   }
 }
@@ -130,4 +140,4 @@ function normalize(text) {
   return String(text ?? '').replace(/\r\n/g, '\n')
 }
 
-module.exports = { upsertComment, normalizeLoginHint, authenticatedLogin, listComments }
+module.exports = { upsertComment, normalizeLoginHint, authenticatedLogin, listComments, request }
