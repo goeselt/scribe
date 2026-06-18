@@ -26,7 +26,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Validate Intent
-        uses: goeselt/intent@d168da88e1330163fb8943b119685d2af453fd8d # v1.1.0
+        uses: goeselt/intent@f6d867043c166cdbe5c9be0ee2fbee84f2065415 # v1.1.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           pr-comment: true
