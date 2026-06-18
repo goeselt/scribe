@@ -84,9 +84,18 @@ first. Runs that produce no commit are reported in the workflow summary only.
 
 ## Pull Request Context
 
-On `pull_request` and `pull_request_target` events, `actions/checkout` lands on a detached merge-commit
-(`refs/pull/N/merge`). A plain `git push` would fail. The action detects this and pushes to
-`origin HEAD:refs/heads/<GITHUB_HEAD_REF>` instead.
+On `pull_request` and `pull_request_target` events, check out the pull request head commit before running Scribe:
+
+```yaml
+- uses: actions/checkout@v6
+  with:
+    ref: ${{ github.event.pull_request.head.sha }}
+```
+
+By default, `actions/checkout` may land on a detached merge commit (`refs/pull/N/merge`). Scribe rejects that state
+before staging files, because pushing a commit based on the merge ref back to the PR branch can rewrite the branch to an
+unexpected history. After verifying that the checkout is the PR head commit, Scribe pushes to
+`origin HEAD:refs/heads/<pull_request.head.ref>`.
 
 Scribe only supports this mode for pull requests whose source branch lives in the same repository as the target branch.
 Fork pull requests are rejected before files are staged or committed.

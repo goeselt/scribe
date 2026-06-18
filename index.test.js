@@ -1,8 +1,18 @@
 'use strict'
 
+const fs = require('node:fs')
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { escapeWorkflowCommandValue, fail, warn, boolInput } = require('./index.js')
+const {
+  escapeWorkflowCommandValue,
+  fail,
+  warn,
+  log,
+  boolInput,
+  createTemporaryGnupgHome,
+  removeTemporaryGnupgHome,
+  importKey,
+} = require('./index.js')
 
 test('escapeWorkflowCommandValue escapes workflow command control characters', () => {
   assert.equal(escapeWorkflowCommandValue('line 1%25\r\nline 2'), 'line 1%2525%0D%0Aline 2')
@@ -40,6 +50,23 @@ test('warn escapes annotation text', () => {
   }
 
   assert.equal(chunks.join(''), '::warning title=Scribe::careful%0Dnow\n')
+})
+
+test('log escapes workflow command control characters', () => {
+  const chunks = []
+  const originalWrite = process.stdout.write
+  process.stdout.write = (chunk) => {
+    chunks.push(chunk)
+    return true
+  }
+
+  try {
+    log('alice\n::warning title=pwned::hi')
+  } finally {
+    process.stdout.write = originalWrite
+  }
+
+  assert.equal(chunks.join(''), '[scribe] alice%0A::warning title=pwned::hi\n')
 })
 
 test('boolInput returns true for "true" input', () => {
@@ -82,4 +109,43 @@ test('boolInput throws for values other than true or false', () => {
   } finally {
     delete process.env['INPUT_TEST-BOOL']
   }
+})
+
+test('createTemporaryGnupgHome creates a private directory that can be removed', () => {
+  const dir = createTemporaryGnupgHome()
+
+  try {
+    assert.equal(fs.statSync(dir).mode & 0o777, 0o700)
+  } finally {
+    removeTemporaryGnupgHome(dir)
+  }
+
+  assert.equal(fs.existsSync(dir), false)
+})
+
+test('importKey imports into the provided temporary GPG home', () => {
+  const key = Buffer.from('fake-private-key', 'utf8').toString('base64')
+  const calls = []
+
+  importKey(key, '/tmp/scribe-gnupg-test', (cmd, args, options) => {
+    calls.push({ cmd, args, options })
+    return { status: 0, stderr: Buffer.alloc(0) }
+  })
+
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].cmd, 'gpg')
+  assert.deepEqual(calls[0].args, ['--batch', '--import'])
+  assert.equal(calls[0].options.env.GNUPGHOME, '/tmp/scribe-gnupg-test')
+  assert.equal(calls[0].options.input.toString('utf8'), 'fake-private-key')
+})
+
+test('importKey reports GPG import failures', () => {
+  assert.throws(
+    () =>
+      importKey('ZmFrZQ==', '/tmp/scribe-gnupg-test', () => ({
+        status: 2,
+        stderr: Buffer.from('bad key', 'utf8'),
+      })),
+    /gpg --import failed \(exit 2\): bad key/,
+  )
 })

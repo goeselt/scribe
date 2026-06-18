@@ -13,7 +13,8 @@ and referenced directly by `action.yml` (`runs.using: node24`).
 | `index.js`   | Entry point: reads inputs, orchestrates Git operations, imports GPG key, writes outputs.     |
 
 The push target is the only behavior that differs between event contexts: `git push` on a push event,
-`git push origin HEAD:refs/heads/<GITHUB_HEAD_REF>` on a pull_request event. Everything else is identical.
+`git push origin HEAD:refs/heads/<pull_request.head.ref>` on a pull_request event. PR events must run from the
+`pull_request.head.sha`; Scribe rejects detached merge-checkouts before staging files.
 
 ## Development Setup
 

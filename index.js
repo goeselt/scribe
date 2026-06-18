@@ -1,13 +1,15 @@
 'use strict'
 
 const fs = require('node:fs')
+const os = require('node:os')
+const path = require('node:path')
 const { execFileSync, spawnSync } = require('node:child_process')
-const { parseFiles, buildAddArgs, resolvePushArgs, resolveCommitMessage } = require('./commit.js')
+const { parseFiles, buildAddArgs, resolvePushArgs, validatePRCheckout, resolveCommitMessage } = require('./commit.js')
 const { MARKER, buildComment, buildSummary } = require('./comment.js')
 const { upsertComment } = require('./github.js')
 
 function log(message) {
-  process.stdout.write(`[scribe] ${message}\n`)
+  process.stdout.write(`[scribe] ${escapeWorkflowCommandValue(message)}\n`)
 }
 
 function escapeWorkflowCommandValue(value) {
@@ -106,15 +108,49 @@ function git(args) {
   return execFileSync('git', args, { encoding: 'utf8' })
 }
 
-function importKey(base64Key) {
+function createTemporaryGnupgHome() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'scribe-gnupg-'))
+  fs.chmodSync(dir, 0o700)
+  return dir
+}
+
+function removeTemporaryGnupgHome(dir) {
+  if (!dir) return
+  fs.rmSync(dir, { recursive: true, force: true })
+}
+
+function importKey(base64Key, gnupgHome, _spawnSync = spawnSync) {
   const keyBuffer = Buffer.from(base64Key, 'base64')
-  const result = spawnSync('gpg', ['--import', '--batch'], {
+  const result = _spawnSync('gpg', ['--batch', '--import'], {
     input: keyBuffer,
     stdio: ['pipe', 'pipe', 'pipe'],
+    env: { ...process.env, GNUPGHOME: gnupgHome },
   })
   if (result.status !== 0) {
     const stderr = (result.stderr ?? Buffer.alloc(0)).toString('utf8')
     throw new Error(`gpg --import failed (exit ${result.status}): ${stderr.trim()}`)
+  }
+}
+
+function enableSigning(base64Key) {
+  const previousGnupgHome = process.env.GNUPGHOME
+  const gnupgHome = createTemporaryGnupgHome()
+  process.env.GNUPGHOME = gnupgHome
+
+  try {
+    importKey(base64Key, gnupgHome)
+    git(['config', 'commit.gpgsign', 'true'])
+  } catch (err) {
+    if (previousGnupgHome === undefined) delete process.env.GNUPGHOME
+    else process.env.GNUPGHOME = previousGnupgHome
+    removeTemporaryGnupgHome(gnupgHome)
+    throw err
+  }
+
+  return () => {
+    if (previousGnupgHome === undefined) delete process.env.GNUPGHOME
+    else process.env.GNUPGHOME = previousGnupgHome
+    removeTemporaryGnupgHome(gnupgHome)
   }
 }
 
@@ -138,6 +174,8 @@ function rollbackCommit(sha) {
 }
 
 async function main() {
+  let cleanupSigning = () => {}
+
   const filesInput = input('FILES')
   const message = input('MESSAGE')
   const userName = input('GIT-USER-NAME')
@@ -157,77 +195,81 @@ async function main() {
     `event=${eventName || '-'} force=${force} signing=${signingKey ? 'yes' : 'no'} pr-comment=${postComment} skip-ci=${skipCi}`,
   )
 
-  const files = parseFiles(filesInput)
-  if (files.length === 0) throw new Error('files input is empty or contains no valid entries')
-  if (!message.trim()) throw new Error('message input is empty')
-  if (!userName.trim()) throw new Error('git-user-name input is empty')
-  if (!userEmail.trim()) throw new Error('git-user-email input is empty')
-  const pushArgs = resolvePushArgs(eventName, headRef, payload)
+  try {
+    const files = parseFiles(filesInput)
+    if (files.length === 0) throw new Error('files input is empty or contains no valid entries')
+    if (!message.trim()) throw new Error('message input is empty')
+    if (!userName.trim()) throw new Error('git-user-name input is empty')
+    if (!userEmail.trim()) throw new Error('git-user-email input is empty')
+    const pushArgs = resolvePushArgs(eventName, headRef, payload)
+    validatePRCheckout(eventName, payload, git(['rev-parse', 'HEAD']).trim())
 
-  git(['config', 'user.name', userName])
-  git(['config', 'user.email', userEmail])
-  log(`identity: ${userName} <${userEmail}>`)
+    git(['config', 'user.name', userName])
+    git(['config', 'user.email', userEmail])
+    log(`identity: ${userName} <${userEmail}>`)
 
-  if (signingKey) {
-    importKey(signingKey)
-    git(['config', 'commit.gpgsign', 'true'])
-    log('gpg: key imported, commit signing enabled')
-  }
+    if (signingKey) {
+      cleanupSigning = enableSigning(signingKey)
+      log('gpg: key imported, commit signing enabled')
+    }
 
-  git(buildAddArgs(files, force))
-  log(`staged: ${files.join(' ')}`)
+    git(buildAddArgs(files, force))
+    log(`staged: ${files.join(' ')}`)
 
-  if (!hasChanges()) {
-    log('no staged changes -- skipping commit')
-    setOutput('committed', 'false')
-    setOutput('sha', '')
+    if (!hasChanges()) {
+      log('no staged changes -- skipping commit')
+      setOutput('committed', 'false')
+      setOutput('sha', '')
+      const record = {
+        committed: false,
+        sha: '',
+        files,
+        message,
+        push: '--',
+        signing: Boolean(signingKey),
+        force,
+      }
+      writeSummary(record)
+      log('result=done committed=false')
+      return
+    }
+
+    const commitMessage = resolveCommitMessage(message, skipCi)
+    git(['commit', '-m', commitMessage])
+    const sha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+    log(`committed: ${sha}`)
+
+    try {
+      git(pushArgs)
+    } catch (err) {
+      try {
+        rollbackCommit(sha)
+      } catch (rollbackErr) {
+        warn(`could not roll back local commit ${sha}: ${rollbackErr.message}`)
+      }
+      throw err
+    }
+    log(`pushed (${pushArgs.join(' ')})`)
+
+    setOutput('committed', 'true')
+    setOutput('sha', sha)
     const record = {
-      committed: false,
-      sha: '',
+      committed: true,
+      sha,
+      repo,
+      committedAt: git(['show', '-s', '--format=%cI', sha]).trim(),
       files,
-      message,
-      push: '--',
+      message: commitMessage,
+      push: pushArgs.join(' '),
       signing: Boolean(signingKey),
       force,
     }
     writeSummary(record)
-    log('result=done committed=false')
-    return
+    await writePRComment({ eventName, payload, token, postComment, record, authorLoginHint: userName })
+    log(`result=done committed=true sha=${sha}`)
+  } finally {
+    cleanupSigning()
   }
-
-  const commitMessage = resolveCommitMessage(message, skipCi)
-  git(['commit', '-m', commitMessage])
-  const sha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
-  log(`committed: ${sha}`)
-
-  try {
-    git(pushArgs)
-  } catch (err) {
-    try {
-      rollbackCommit(sha)
-    } catch (rollbackErr) {
-      warn(`could not roll back local commit ${sha}: ${rollbackErr.message}`)
-    }
-    throw err
-  }
-  log(`pushed (${pushArgs.join(' ')})`)
-
-  setOutput('committed', 'true')
-  setOutput('sha', sha)
-  const record = {
-    committed: true,
-    sha,
-    repo,
-    committedAt: git(['show', '-s', '--format=%cI', sha]).trim(),
-    files,
-    message: commitMessage,
-    push: pushArgs.join(' '),
-    signing: Boolean(signingKey),
-    force,
-  }
-  writeSummary(record)
-  await writePRComment({ eventName, payload, token, postComment, record, authorLoginHint: userName })
-  log(`result=done committed=true sha=${sha}`)
 }
 
 if (require.main === module) {
@@ -237,4 +279,14 @@ if (require.main === module) {
   })
 }
 
-module.exports = { escapeWorkflowCommandValue, fail, warn, boolInput, main }
+module.exports = {
+  escapeWorkflowCommandValue,
+  fail,
+  warn,
+  log,
+  boolInput,
+  createTemporaryGnupgHome,
+  removeTemporaryGnupgHome,
+  importKey,
+  main,
+}
