@@ -28,15 +28,16 @@ Keep `index.js` close to that sequence. Put reusable details in the small module
 
 ## Files
 
-| File          | Responsibility                                                                            |
-| ------------- | ----------------------------------------------------------------------------------------- |
-| `index.js`    | Entry point and orchestration. It should read like the action's happy path plus failures. |
-| `inputs.js`   | Action input parsing, boolean handling, and Git identity defaults.                        |
-| `git.js`      | Git command wrapper, user-facing Git error hints, GPG key import, and rollback helpers.   |
-| `commit.js`   | Pure commit logic: file parsing, add args, PR push target, PR checkout validation.        |
-| `comment.js`  | Markdown rendering and commit-based PR comment record merging.                            |
-| `github.js`   | GitHub REST calls for finding, creating, and updating the shared PR comment.              |
-| `workflow.js` | GitHub Actions command escaping, annotations, outputs, and event payload loading.         |
+| File             | Responsibility                                                                                            |
+| ---------------- | --------------------------------------------------------------------------------------------------------- |
+| `index.js`       | Entry point and orchestration. It should read like the action's happy path plus failures.                 |
+| `inputs.js`      | Action input parsing, boolean handling, and Git identity defaults.                                        |
+| `git.js`         | Git command wrapper, user-facing Git error hints, output redaction, GPG key import, and rollback helpers. |
+| `github-auth.js` | Request-scoped `github-token` injection for `git push` (temporary `http.extraheader`, no config writes).  |
+| `commit.js`      | Pure commit logic: file parsing, add args, PR push target, PR checkout validation.                        |
+| `comment.js`     | Markdown rendering and commit-based PR comment record merging.                                            |
+| `github.js`      | GitHub REST calls for finding, creating, and updating the shared PR comment.                              |
+| `workflow.js`    | GitHub Actions command escaping, annotations, outputs, and event payload loading.                         |
 
 Tests should sit beside the responsibility they protect: `inputs.test.js` for input parsing, `git.test.js` for Git/GPG
 helpers, and so on.
@@ -54,8 +55,9 @@ Fork PRs are rejected before staging files. Detached merge checkouts are rejecte
 
 - Input changes: update `action.yml`, `README.md`, `inputs.js`, and `inputs.test.js`.
 - Git command behavior: update `git.js` and add or adjust `git.test.js`.
-- Git authentication behavior: keep `github-token` scoped to the push operation and clean up temporary helpers before
-  the action exits.
+- Git authentication behavior: it lives in `github-auth.js`. Keep `github-token` scoped to network commands (currently
+  `git push`) and injected per command via the environment, never written to `process.env` or the local Git config.
+  Update `github-auth.test.js` alongside it.
 - PR push behavior: update `commit.js`, `commit.test.js`, and the README's pull request section.
 - Summary or PR comment output: update `comment.js`, `comment.test.js`, and screenshots/examples if any are added later.
 - GitHub API behavior: update `github.js` and `github.test.js`.

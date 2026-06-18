@@ -4,6 +4,7 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 const { execFileSync, spawnSync } = require('node:child_process')
+const { withGitHubToken } = require('./github-auth.js')
 
 function redactText(text) {
   return String(text ?? '')
@@ -55,41 +56,12 @@ function git(args, options = {}) {
   }
 }
 
-function withTemporaryGitHubToken(token, fn) {
-  if (!token) return fn({})
-
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'scribe-askpass-'))
-  fs.chmodSync(dir, 0o700)
-  const askpass = path.join(dir, 'askpass.sh')
-  fs.writeFileSync(
-    askpass,
-    [
-      '#!/bin/sh',
-      'case "$1" in',
-      "  *Username*) printf '%s\\n' x-access-token ;;",
-      '  *) printf \'%s\\n\' "$SCRIBE_GITHUB_TOKEN" ;;',
-      'esac',
-      '',
-    ].join('\n'),
-    { mode: 0o700 },
-  )
-
-  try {
-    return fn({
-      env: {
-        ...process.env,
-        GIT_ASKPASS: askpass,
-        GIT_TERMINAL_PROMPT: '0',
-        SCRIBE_GITHUB_TOKEN: token,
-      },
-    })
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true })
-  }
-}
-
 function gitPush(args, token, _git = git) {
-  return withTemporaryGitHubToken(token, (options) => _git(args, options))
+  return withGitHubToken(
+    (_name, gitArgs, options) => _git(gitArgs, options),
+    token,
+    (exec) => exec('git', args),
+  )
 }
 
 function hasChanges() {
@@ -178,5 +150,4 @@ module.exports = {
   removeTemporaryGnupgHome,
   importKey,
   enableSigning,
-  withTemporaryGitHubToken,
 }
