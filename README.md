@@ -64,17 +64,17 @@ For signed commits, pass a base64-encoded private key and, if needed, override t
 
 ## Inputs
 
-| Input            | Required | Default | Description                                                           |
-| ---------------- | -------- | ------- | --------------------------------------------------------------------- |
-| `files`          | Yes      | --      | Newline-separated list of files or directories to stage.              |
-| `message`        | Yes      | --      | Commit message.                                                       |
-| `git-user-name`  | No       | `github-actions[bot]` | Git author name.                                      |
-| `git-user-email` | No       | `41898282+github-actions[bot]@users.noreply.github.com` | Git author email.           |
-| `signing-key`    | No       | `''`    | Base64-encoded GPG signing key. When omitted, commits are unsigned.   |
-| `force`          | No       | `false` | Pass `--force` to `git add`. Required for gitignored paths.           |
-| `github-token`   | No       | `''`    | Token used to create or update the PR comment on pull_request events. |
-| `pr-comment`     | No       | `true`  | Whether to create or update the explanatory PR comment on PR events.  |
-| `skip-ci`        | No       | `true`  | Whether to append `[skip ci]` to the commit message when absent.      |
+| Input            | Required | Default                                                 | Description                                                           |
+| ---------------- | -------- | ------------------------------------------------------- | --------------------------------------------------------------------- |
+| `files`          | Yes      | --                                                      | Newline-separated list of files or directories to stage.              |
+| `message`        | Yes      | --                                                      | Commit message.                                                       |
+| `git-user-name`  | No       | `github-actions[bot]`                                   | Git author name.                                                      |
+| `git-user-email` | No       | `41898282+github-actions[bot]@users.noreply.github.com` | Git author email.                                                     |
+| `signing-key`    | No       | `''`                                                    | Base64-encoded GPG signing key. When omitted, commits are unsigned.   |
+| `force`          | No       | `false`                                                 | Pass `--force` to `git add`. Required for gitignored paths.           |
+| `github-token`   | No       | `''`                                                    | Token used to create or update the PR comment on pull_request events. |
+| `pr-comment`     | No       | `true`                                                  | Whether to create or update the explanatory PR comment on PR events.  |
+| `skip-ci`        | No       | `true`                                                  | Whether to append `[skip ci]` to the commit message when absent.      |
 
 ## Outputs
 
@@ -161,8 +161,8 @@ Fork pull requests are rejected before files are staged or committed.
 > Pushing with `GITHUB_TOKEN` does **not** trigger new workflow runs, but `GITHUB_TOKEN` cannot bypass branch protection
 > rules.
 >
-> If Scribe commits changes under `.github/workflows/`, the checkout token may need permission to update workflows
-> (for example the `workflow` scope on a PAT).
+> If Scribe commits changes under `.github/workflows/`, the checkout token may need permission to update workflows (for
+> example the `workflow` scope on a PAT).
 
 ## Contributing
 

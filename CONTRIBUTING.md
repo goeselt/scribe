@@ -43,9 +43,9 @@ helpers, and so on.
 
 ## Event Behavior
 
-| Event | Push behavior | Notes |
-| ----- | ------------- | ----- |
-| `push` / `workflow_dispatch` | `git push` | The checkout token must be able to push to the current branch. |
+| Event                                  | Push behavior                                             | Notes                                                                   |
+| -------------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `push` / `workflow_dispatch`           | `git push`                                                | The checkout token must be able to push to the current branch.          |
 | `pull_request` / `pull_request_target` | `git push origin HEAD:refs/heads/<pull_request.head.ref>` | Same-repository PRs only. The checkout must be `pull_request.head.sha`. |
 
 Fork PRs are rejected before staging files. Detached merge checkouts are rejected before staging files.

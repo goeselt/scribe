@@ -79,4 +79,11 @@ function resolveCommitMessage(message, skipCi) {
   return `${message} [skip ci]`
 }
 
-module.exports = { parseFiles, buildAddArgs, buildCommitArgs, resolvePushArgs, validatePRCheckout, resolveCommitMessage }
+module.exports = {
+  parseFiles,
+  buildAddArgs,
+  buildCommitArgs,
+  resolvePushArgs,
+  validatePRCheckout,
+  resolveCommitMessage,
+}

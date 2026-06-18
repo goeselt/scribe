@@ -42,11 +42,7 @@ function formatGitError(args, err) {
   const stdout = redactText((err?.stdout ?? Buffer.alloc(0)).toString('utf8')).trim()
   const details = stderr || stdout
   const hint = gitFailureHint(args)
-  return [
-    `git ${args.join(' ')} failed${status}.`,
-    details ? `Git said: ${details}` : '',
-    hint ? `Hint: ${hint}` : '',
-  ]
+  return [`git ${args.join(' ')} failed${status}.`, details ? `Git said: ${details}` : '', hint ? `Hint: ${hint}` : '']
     .filter(Boolean)
     .join(' ')
 }
@@ -55,7 +51,7 @@ function git(args) {
   try {
     return execFileSync('git', args, { encoding: 'utf8' })
   } catch (err) {
-    throw new Error(formatGitError(args, err))
+    throw new Error(formatGitError(args, err), { cause: err })
   }
 }
 

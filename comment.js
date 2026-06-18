@@ -42,7 +42,10 @@ function limited(value, maxLen) {
 
 function normalizeFilesForStorage(files) {
   if (!Array.isArray(files)) return []
-  return files.map((f) => limited(f, MAX_STORED_FILE_LENGTH)).filter(Boolean).slice(0, MAX_STORED_FILES)
+  return files
+    .map((f) => limited(f, MAX_STORED_FILE_LENGTH))
+    .filter(Boolean)
+    .slice(0, MAX_STORED_FILES)
 }
 
 function normalizeRecordForStorage(record) {

@@ -102,7 +102,10 @@ test('buildComment keeps only the newest records', () => {
   assert.equal(records.length, MAX_COMMENT_RECORDS)
   assert.equal(records[0].sha, String(MAX_COMMENT_RECORDS + 4).padStart(40, '0'))
   assert.equal(records.at(-1).sha, String(5).padStart(40, '0'))
-  assert.equal(records.some((r) => r.sha === String(0).padStart(40, '0')), false)
+  assert.equal(
+    records.some((r) => r.sha === String(0).padStart(40, '0')),
+    false,
+  )
 })
 
 test('buildSummary renders committed and skipped records', () => {
