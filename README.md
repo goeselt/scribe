@@ -1,29 +1,43 @@
 # scribe
 
-GitHub Action that stages files, creates a GPG-signed commit, and pushes to the current branch. Handles the push-vs-PR
-context difference automatically.
+GitHub Action that stages files, commits them, and pushes the result. Signing is optional, the default Git identity is
+`github-actions[bot]`, and pull request push targets are handled after the workflow checks out the PR head commit.
 
 Scribe writes a GitHub Actions workflow summary for every invocation. On pull request events, it can also maintain one
 shared PR comment that lists the commits Scribe added to the PR.
 
 ## Usage
 
+Minimal workflow:
+
 ```yaml
-- name: Commit Release
-  uses: goeselt/scribe@v1
-  with:
-    files: |
-      package.json
-      package-lock.json
-    message: 'chore(version): release v${{ steps.bumpkin.outputs.next-version }}'
-    git-user-name: ${{ vars.RELEASE_SIGNING_USER }}
-    git-user-email: ${{ vars.RELEASE_SIGNING_EMAIL }}
-    signing-key: ${{ secrets.RELEASE_SIGNING_KEY }}
-    github-token: ${{ secrets.GITHUB_TOKEN }}
-    skip-ci: true
+name: Update Generated Files
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Generate files
+        run: npm run generate
+
+      - name: Commit generated files
+        uses: goeselt/scribe@v1
+        with:
+          files: |
+            generated/
+            package-lock.json
+          message: 'chore: update generated files'
 ```
 
-For gitignored paths (e.g. `dist/`), set `force: 'true'`:
+For gitignored paths such as `dist/`, set `force: true`:
 
 ```yaml
 - uses: goeselt/scribe@v1
@@ -32,13 +46,20 @@ For gitignored paths (e.g. `dist/`), set `force: 'true'`:
       dist/
       package.json
       package-lock.json
-    message: 'chore(version): release v${{ steps.bumpkin.outputs.next-version }}'
+    message: 'chore: update bundle'
+    force: true
+```
+
+For signed commits, pass a base64-encoded private key and, if needed, override the Git identity:
+
+```yaml
+- uses: goeselt/scribe@v1
+  with:
+    files: package.json
+    message: 'chore: release ${{ steps.release.outputs.tag }}'
     git-user-name: ${{ vars.RELEASE_SIGNING_USER }}
     git-user-email: ${{ vars.RELEASE_SIGNING_EMAIL }}
     signing-key: ${{ secrets.RELEASE_SIGNING_KEY }}
-    force: true
-    github-token: ${{ secrets.GITHUB_TOKEN }}
-    skip-ci: true
 ```
 
 ## Inputs
@@ -47,8 +68,8 @@ For gitignored paths (e.g. `dist/`), set `force: 'true'`:
 | ---------------- | -------- | ------- | --------------------------------------------------------------------- |
 | `files`          | Yes      | --      | Newline-separated list of files or directories to stage.              |
 | `message`        | Yes      | --      | Commit message.                                                       |
-| `git-user-name`  | Yes      | --      | Git author name.                                                      |
-| `git-user-email` | Yes      | --      | Git author email.                                                     |
+| `git-user-name`  | No       | `github-actions[bot]` | Git author name.                                      |
+| `git-user-email` | No       | `41898282+github-actions[bot]@users.noreply.github.com` | Git author email.           |
 | `signing-key`    | No       | `''`    | Base64-encoded GPG signing key. When omitted, commits are unsigned.   |
 | `force`          | No       | `false` | Pass `--force` to `git add`. Required for gitignored paths.           |
 | `github-token`   | No       | `''`    | Token used to create or update the PR comment on pull_request events. |
@@ -84,12 +105,37 @@ first. Runs that produce no commit are reported in the workflow summary only.
 
 ## Pull Request Context
 
-On `pull_request` and `pull_request_target` events, check out the pull request head commit before running Scribe:
+On `pull_request` and `pull_request_target` events, check out the pull request head commit before running Scribe and use
+a checkout token that can push to the branch:
 
 ```yaml
-- uses: actions/checkout@v6
-  with:
-    ref: ${{ github.event.pull_request.head.sha }}
+name: Update PR Files
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Generate files
+        run: npm run generate
+
+      - name: Commit generated files
+        uses: goeselt/scribe@v1
+        with:
+          files: generated/
+          message: 'chore: update generated files'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
 By default, `actions/checkout` may land on a detached merge commit (`refs/pull/N/merge`). Scribe rejects that state
@@ -108,16 +154,6 @@ Fork pull requests are rejected before files are staged or committed.
 >
 > Pushing with `GITHUB_TOKEN` does **not** trigger new workflow runs, but `GITHUB_TOKEN` cannot bypass branch protection
 > rules.
-
-## Prerequisites
-
-The calling job must check out with a token that has push access to the branch:
-
-```yaml
-- uses: actions/checkout@v6
-  with:
-    token: ${{ steps.app.outputs.token }} # App token or PAT with push rights
-```
 
 ## Contributing
 

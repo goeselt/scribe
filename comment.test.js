@@ -90,9 +90,16 @@ test('buildSummary renders committed and skipped records', () => {
   const skipped = buildSummary(skippedRecord)
 
   assert.ok(committed.includes('`committed`'))
-  assert.ok(committed.includes('`1234567890abcdef`'))
-  assert.ok(skipped.includes('`skipped`'))
+  assert.ok(committed.includes('[1234567890abcdef](https://github.com/owner/repo/commit/1234567890abcdef)'))
+  assert.ok(skipped.includes('`skipped - no staged changes`'))
   assert.ok(skipped.includes('`dist/`'))
+})
+
+test('buildSummary renders a plain SHA when repo is absent', () => {
+  const noRepoRecord = { ...versionRecord }
+  delete noRepoRecord.repo
+
+  assert.ok(buildSummary(noRepoRecord).includes('`1234567890abcdef`'))
 })
 
 test('buildComment renders a linked commit SHA when repo is present', () => {

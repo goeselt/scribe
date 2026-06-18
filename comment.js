@@ -20,8 +20,8 @@ function shortSha(sha) {
   return sha ? String(sha).slice(0, 7) : '--'
 }
 
-function statusText(committed) {
-  return committed ? 'committed' : 'skipped'
+function resultText(record) {
+  return record.committed ? 'committed' : 'skipped - no staged changes'
 }
 
 function encodeRecords(records) {
@@ -75,6 +75,12 @@ function commitCell(r) {
   return label
 }
 
+function summaryCommitCell(record) {
+  if (!record.sha) return '--'
+  if (record.repo) return `[${record.sha}](https://github.com/${record.repo}/commit/${record.sha})`
+  return `\`${record.sha}\``
+}
+
 function commentTable(records) {
   const rows = records.map((r) => [commitCell(r), filesCell(r.files), cell(r.message, 72)].join(' | '))
 
@@ -99,8 +105,8 @@ function summaryTable(record) {
   return [
     '| Field | Value |',
     '| :-- | :-- |',
-    `| Result | \`${statusText(record.committed)}\` |`,
-    `| Commit | ${record.sha ? `\`${record.sha}\`` : '--'} |`,
+    `| Result | \`${resultText(record)}\` |`,
+    `| Commit | ${summaryCommitCell(record)} |`,
     `| Files | ${filesCell(record.files)} |`,
     `| Message | ${cell(record.message, 100)} |`,
     `| Push | ${cell(record.push, 100)} |`,

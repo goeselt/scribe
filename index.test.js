@@ -9,6 +9,8 @@ const {
   warn,
   log,
   boolInput,
+  resolveGitIdentity,
+  formatGitError,
   createTemporaryGnupgHome,
   removeTemporaryGnupgHome,
   importKey,
@@ -109,6 +111,40 @@ test('boolInput throws for values other than true or false', () => {
   } finally {
     delete process.env['INPUT_TEST-BOOL']
   }
+})
+
+test('resolveGitIdentity uses the github-actions bot by default', () => {
+  assert.deepEqual(resolveGitIdentity('', '  '), {
+    userName: 'github-actions[bot]',
+    userEmail: '41898282+github-actions[bot]@users.noreply.github.com',
+  })
+})
+
+test('resolveGitIdentity preserves explicit identity inputs after trimming', () => {
+  assert.deepEqual(resolveGitIdentity('  release-bot  ', '  release@example.com  '), {
+    userName: 'release-bot',
+    userEmail: 'release@example.com',
+  })
+})
+
+test('formatGitError includes command output and an action-oriented push hint', () => {
+  const message = formatGitError(['push'], {
+    status: 128,
+    stderr: Buffer.from('remote: permission denied', 'utf8'),
+  })
+
+  assert.match(message, /git push failed \(exit 128\)/)
+  assert.match(message, /Git said: remote: permission denied/)
+  assert.match(message, /actions\/checkout used a token with push access/)
+})
+
+test('formatGitError includes a checkout hint for rev-parse failures', () => {
+  const message = formatGitError(['rev-parse', 'HEAD'], {
+    status: 128,
+    stderr: Buffer.from('fatal: not a git repository', 'utf8'),
+  })
+
+  assert.match(message, /Run actions\/checkout before Scribe/)
 })
 
 test('createTemporaryGnupgHome creates a private directory that can be removed', () => {

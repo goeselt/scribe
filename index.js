@@ -8,6 +8,9 @@ const { parseFiles, buildAddArgs, resolvePushArgs, validatePRCheckout, resolveCo
 const { MARKER, buildComment, buildSummary } = require('./comment.js')
 const { upsertComment } = require('./github.js')
 
+const DEFAULT_GIT_USER_NAME = 'github-actions[bot]'
+const DEFAULT_GIT_USER_EMAIL = '41898282+github-actions[bot]@users.noreply.github.com'
+
 function log(message) {
   process.stdout.write(`[scribe] ${escapeWorkflowCommandValue(message)}\n`)
 }
@@ -36,6 +39,13 @@ function boolInput(name, fallback) {
   if (raw === 'true') return true
   if (raw === 'false') return false
   throw new Error(`${name} must be "true" or "false", got ${JSON.stringify(raw)}`)
+}
+
+function resolveGitIdentity(userName, userEmail) {
+  return {
+    userName: String(userName ?? '').trim() || DEFAULT_GIT_USER_NAME,
+    userEmail: String(userEmail ?? '').trim() || DEFAULT_GIT_USER_EMAIL,
+  }
 }
 
 function setOutput(name, value) {
@@ -104,8 +114,44 @@ async function writePRComment({ eventName, payload, token, postComment, record, 
   }
 }
 
+function gitFailureHint(args) {
+  const command = args[0]
+  if (command === 'add') {
+    return 'Check that every files entry exists in the checkout. Use force: true for gitignored paths.'
+  }
+  if (command === 'commit') {
+    return 'Check the Git identity and signing-key inputs. If signing is enabled, make sure the secret contains a valid base64-encoded private key.'
+  }
+  if (command === 'push') {
+    return 'Check that actions/checkout used a token with push access and that branch protection allows this commit.'
+  }
+  if (command === 'rev-parse') {
+    return 'Run actions/checkout before Scribe so the workspace contains a Git checkout.'
+  }
+  return ''
+}
+
+function formatGitError(args, err) {
+  const status = typeof err?.status === 'number' ? ` (exit ${err.status})` : ''
+  const stderr = (err?.stderr ?? Buffer.alloc(0)).toString('utf8').trim()
+  const stdout = (err?.stdout ?? Buffer.alloc(0)).toString('utf8').trim()
+  const details = stderr || stdout
+  const hint = gitFailureHint(args)
+  return [
+    `git ${args.join(' ')} failed${status}.`,
+    details ? `Git said: ${details}` : '',
+    hint ? `Hint: ${hint}` : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+}
+
 function git(args) {
-  return execFileSync('git', args, { encoding: 'utf8' })
+  try {
+    return execFileSync('git', args, { encoding: 'utf8' })
+  } catch (err) {
+    throw new Error(formatGitError(args, err))
+  }
 }
 
 function createTemporaryGnupgHome() {
@@ -155,12 +201,11 @@ function enableSigning(base64Key) {
 }
 
 function hasChanges() {
-  try {
-    execFileSync('git', ['diff', '--staged', '--quiet'])
-    return false
-  } catch {
-    return true
-  }
+  const args = ['diff', '--staged', '--quiet']
+  const result = spawnSync('git', args, { stdio: ['ignore', 'pipe', 'pipe'] })
+  if (result.status === 0) return false
+  if (result.status === 1) return true
+  throw new Error(formatGitError(args, result))
 }
 
 function rollbackCommit(sha) {
@@ -178,8 +223,7 @@ async function main() {
 
   const filesInput = input('FILES')
   const message = input('MESSAGE')
-  const userName = input('GIT-USER-NAME')
-  const userEmail = input('GIT-USER-EMAIL')
+  const { userName, userEmail } = resolveGitIdentity(input('GIT-USER-NAME'), input('GIT-USER-EMAIL'))
   const signingKey = input('SIGNING-KEY')
   const force = boolInput('FORCE', false)
   const token = input('GITHUB-TOKEN')
@@ -199,8 +243,6 @@ async function main() {
     const files = parseFiles(filesInput)
     if (files.length === 0) throw new Error('files input is empty or contains no valid entries')
     if (!message.trim()) throw new Error('message input is empty')
-    if (!userName.trim()) throw new Error('git-user-name input is empty')
-    if (!userEmail.trim()) throw new Error('git-user-email input is empty')
     const pushArgs = resolvePushArgs(eventName, headRef, payload)
     validatePRCheckout(eventName, payload, git(['rev-parse', 'HEAD']).trim())
 
@@ -236,7 +278,7 @@ async function main() {
 
     const commitMessage = resolveCommitMessage(message, skipCi)
     git(['commit', '-m', commitMessage])
-    const sha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+    const sha = git(['rev-parse', 'HEAD']).trim()
     log(`committed: ${sha}`)
 
     try {
@@ -285,6 +327,8 @@ module.exports = {
   warn,
   log,
   boolInput,
+  resolveGitIdentity,
+  formatGitError,
   createTemporaryGnupgHome,
   removeTemporaryGnupgHome,
   importKey,
