@@ -2,7 +2,14 @@
 
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { parseFiles, buildAddArgs, resolvePushArgs, validatePRCheckout, resolveCommitMessage } = require('./commit.js')
+const {
+  parseFiles,
+  buildAddArgs,
+  buildCommitArgs,
+  resolvePushArgs,
+  validatePRCheckout,
+  resolveCommitMessage,
+} = require('./commit.js')
 
 const sameRepoPRPayload = {
   repository: { full_name: 'owner/repo' },
@@ -47,6 +54,10 @@ test('buildAddArgs produces git add --force args for gitignored paths', () => {
 test('buildAddArgs uses -- separator to prevent files from being parsed as flags', () => {
   const args = buildAddArgs(['-strange-filename'], false)
   assert.equal(args[args.indexOf('-strange-filename') - 1], '--')
+})
+
+test('buildCommitArgs disables repository hooks', () => {
+  assert.deepEqual(buildCommitArgs('chore: update'), ['commit', '--no-verify', '-m', 'chore: update'])
 })
 
 test('resolvePushArgs returns plain push on push events', () => {

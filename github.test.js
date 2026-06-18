@@ -230,6 +230,11 @@ test('authenticatedLogin falls back to the hint on a 4xx response', async () => 
   assert.equal(await authenticatedLogin('token', 'my-app[bot]', mockRequest), 'my-app[bot]')
 })
 
+test('authenticatedLogin does not use a plain username as an unverified fallback', async () => {
+  const mockRequest = () => Promise.reject(new Error('GitHub API GET /user --> HTTP 403: forbidden'))
+  assert.equal(await authenticatedLogin('token', 'octocat', mockRequest), '')
+})
+
 test('authenticatedLogin rethrows non-4xx errors', async () => {
   const mockRequest = () => Promise.reject(new Error('GitHub API GET /user --> HTTP 503: unavailable'))
   await assert.rejects(() => authenticatedLogin('token', 'fallback', mockRequest), /HTTP 503/)

@@ -69,12 +69,17 @@ function normalizeLoginHint(value) {
   return ''
 }
 
+function normalizeBotLoginHint(value) {
+  const login = normalizeLoginHint(value)
+  return login.endsWith('[bot]') ? login : ''
+}
+
 async function authenticatedLogin(token, fallbackLogin = '', _request = request) {
   try {
     const viewer = await _request('GET', '/user', token)
-    return typeof viewer?.login === 'string' ? viewer.login : normalizeLoginHint(fallbackLogin)
+    return typeof viewer?.login === 'string' ? viewer.login : normalizeBotLoginHint(fallbackLogin)
   } catch (err) {
-    if (/HTTP 4\d\d/.test(err.message)) return normalizeLoginHint(fallbackLogin)
+    if (/HTTP 4\d\d/.test(err.message)) return normalizeBotLoginHint(fallbackLogin)
     throw err
   }
 }

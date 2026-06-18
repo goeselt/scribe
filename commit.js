@@ -16,6 +16,12 @@ function buildAddArgs(files, force) {
   return ['add', '--', ...files]
 }
 
+// buildCommitArgs disables repository hooks so an earlier workflow step cannot
+// inject code into Scribe's commit operation through core.hooksPath.
+function buildCommitArgs(message) {
+  return ['commit', '--no-verify', '-m', message]
+}
+
 // resolvePushArgs returns git-push arguments appropriate for the event context.
 //
 // On pull_request and pull_request_target events, push to the actual PR branch
@@ -73,4 +79,4 @@ function resolveCommitMessage(message, skipCi) {
   return `${message} [skip ci]`
 }
 
-module.exports = { parseFiles, buildAddArgs, resolvePushArgs, validatePRCheckout, resolveCommitMessage }
+module.exports = { parseFiles, buildAddArgs, buildCommitArgs, resolvePushArgs, validatePRCheckout, resolveCommitMessage }

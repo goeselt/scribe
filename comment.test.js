@@ -92,7 +92,7 @@ test('buildComment keeps only the newest records', () => {
     const id = String(i).padStart(2, '0')
     comment = buildComment(comment, {
       ...versionRecord,
-      sha: `sha-${id}`,
+      sha: String(i).padStart(40, '0'),
       committedAt: `2026-06-07T12:${id}:00+00:00`,
       message: `commit ${id}`,
     })
@@ -100,9 +100,9 @@ test('buildComment keeps only the newest records', () => {
 
   const records = parseRecords(comment)
   assert.equal(records.length, MAX_COMMENT_RECORDS)
-  assert.equal(records[0].sha, `sha-${String(MAX_COMMENT_RECORDS + 4).padStart(2, '0')}`)
-  assert.equal(records.at(-1).sha, 'sha-05')
-  assert.equal(records.some((r) => r.sha === 'sha-00'), false)
+  assert.equal(records[0].sha, String(MAX_COMMENT_RECORDS + 4).padStart(40, '0'))
+  assert.equal(records.at(-1).sha, String(5).padStart(40, '0'))
+  assert.equal(records.some((r) => r.sha === String(0).padStart(40, '0')), false)
 })
 
 test('buildSummary renders committed and skipped records', () => {
@@ -146,16 +146,51 @@ test('parseRecords silently ignores valid base64 that decodes to a non-array', (
   assert.deepEqual(parseRecords(`<!-- scribe-records: ${encoded} -->`), [])
 })
 
-test('parseRecords filters out records that are missing a string sha', () => {
+test('buildComment stores bounded hidden records', () => {
+  const comment = buildComment('', {
+    ...versionRecord,
+    files: Array.from({ length: 60 }, (_, i) => `very-long-file-${i}-${'x'.repeat(200)}.js`),
+    message: 'm'.repeat(1000),
+    push: 'p'.repeat(500),
+  })
+  const [record] = parseRecords(comment)
+
+  assert.equal(record.files.length, 50)
+  assert.equal(record.files[0].length, 120)
+  assert.equal(record.message.length, 500)
+  assert.equal(record.push.length, 160)
+})
+
+test('parseRecords filters out records that are missing a valid sha', () => {
   const encoded = Buffer.from(
-    JSON.stringify([{ sha: 123 }, { noSha: true }, null, { sha: 'abc123' }]),
+    JSON.stringify([{ sha: 123 }, { noSha: true }, null, { sha: 'not-a-sha' }, { sha: 'abc1234' }]),
     'utf8',
   ).toString('base64')
   const records = parseRecords(`<!-- scribe-records: ${encoded} -->`)
   assert.deepEqual(
     records.map((r) => r.sha),
-    ['abc123'],
+    ['abc1234'],
   )
+})
+
+test('parseRecords normalizes oversized hidden records from existing comments', () => {
+  const encoded = Buffer.from(
+    JSON.stringify([
+      {
+        sha: 'fedcba9876543210',
+        repo: 'owner/repo',
+        files: ['x'.repeat(500)],
+        message: 'm'.repeat(1000),
+        push: 'p'.repeat(500),
+      },
+    ]),
+    'utf8',
+  ).toString('base64')
+  const [record] = parseRecords(`<!-- scribe-records: ${encoded} -->`)
+
+  assert.equal(record.files[0].length, 120)
+  assert.equal(record.message.length, 500)
+  assert.equal(record.push.length, 160)
 })
 
 test('parseRecords returns an empty array when the marker is absent', () => {

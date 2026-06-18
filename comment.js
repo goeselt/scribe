@@ -3,6 +3,12 @@
 const MARKER = '<!-- scribe -->'
 const RECORDS_RE = /<!-- scribe-records: ([A-Za-z0-9+/=]+) -->/
 const MAX_COMMENT_RECORDS = 50
+const MAX_STORED_FILES = 50
+const MAX_STORED_FILE_LENGTH = 120
+const MAX_STORED_MESSAGE_LENGTH = 500
+const MAX_STORED_PUSH_LENGTH = 160
+const SHA_RE = /^[0-9a-f]{7,64}$/i
+const REPO_RE = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/
 
 function clean(str) {
   return String(str ?? '')
@@ -29,6 +35,34 @@ function encodeRecords(records) {
   return Buffer.from(JSON.stringify(records), 'utf8').toString('base64')
 }
 
+function limited(value, maxLen) {
+  const text = clean(value)
+  return text.length > maxLen ? text.slice(0, maxLen) : text
+}
+
+function storedFiles(files) {
+  if (!Array.isArray(files)) return []
+  return files.map((f) => limited(f, MAX_STORED_FILE_LENGTH)).filter(Boolean).slice(0, MAX_STORED_FILES)
+}
+
+function storedRecord(record) {
+  const sha = clean(record?.sha)
+  if (!SHA_RE.test(sha)) return null
+
+  const repo = clean(record?.repo)
+  return {
+    committed: Boolean(record?.committed),
+    sha,
+    ...(REPO_RE.test(repo) ? { repo } : {}),
+    committedAt: limited(record?.committedAt, 40),
+    files: storedFiles(record?.files),
+    message: limited(record?.message, MAX_STORED_MESSAGE_LENGTH),
+    push: limited(record?.push, MAX_STORED_PUSH_LENGTH),
+    signing: Boolean(record?.signing),
+    force: Boolean(record?.force),
+  }
+}
+
 function parseRecords(body) {
   const bodies = Array.isArray(body) ? body : [body]
   const records = []
@@ -39,7 +73,7 @@ function parseRecords(body) {
 
     try {
       const parsed = JSON.parse(Buffer.from(match[1], 'base64').toString('utf8'))
-      if (Array.isArray(parsed)) records.push(...parsed.filter((r) => r && typeof r.sha === 'string'))
+      if (Array.isArray(parsed)) records.push(...parsed.map(storedRecord).filter(Boolean))
     } catch {
       // Ignore malformed hidden state; visible Markdown remains informational.
     }
@@ -89,7 +123,10 @@ function commentTable(records) {
 }
 
 function buildComment(existingBody, record) {
-  const records = sortRecords(upsertRecord(parseRecords(existingBody), record)).slice(0, MAX_COMMENT_RECORDS)
+  const next = storedRecord(record)
+  if (!next) throw new Error('comment record is missing a valid commit sha')
+
+  const records = sortRecords(upsertRecord(parseRecords(existingBody), next)).slice(0, MAX_COMMENT_RECORDS)
   return [
     MARKER,
     `<!-- scribe-records: ${encodeRecords(records)} -->`,

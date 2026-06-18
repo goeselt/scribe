@@ -35,6 +35,7 @@ test('formatGitError includes a checkout hint for rev-parse failures', () => {
 test('redactText removes credentials from Git output', () => {
   const text = [
     'remote: https://x-access-token:ghs_secret123@github.com/owner/repo.git',
+    'fatal: x-access-token:ghp_baresecret@github.com:owner/repo.git',
     'AUTHORIZATION: basic abc123+/=',
     'https://github.com/owner/repo?access_token=secret&x=1',
   ].join('\n')
@@ -42,9 +43,11 @@ test('redactText removes credentials from Git output', () => {
   const redacted = redactText(text)
 
   assert.ok(!redacted.includes('ghs_secret123'))
+  assert.ok(!redacted.includes('ghp_baresecret'))
   assert.ok(!redacted.includes('abc123'))
   assert.ok(!redacted.includes('access_token=secret'))
   assert.ok(redacted.includes('https://***@github.com/owner/repo.git'))
+  assert.ok(redacted.includes('x-access-token:***@github.com:owner/repo.git'))
   assert.ok(redacted.includes('AUTHORIZATION: ***'))
   assert.ok(redacted.includes('access_token=***'))
 })

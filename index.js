@@ -3,7 +3,14 @@
 const fs = require('node:fs')
 const { readInputs } = require('./inputs.js')
 const { git, hasChanges, validateBranchRef, rollbackCommit, enableSigning } = require('./git.js')
-const { parseFiles, buildAddArgs, resolvePushArgs, validatePRCheckout, resolveCommitMessage } = require('./commit.js')
+const {
+  parseFiles,
+  buildAddArgs,
+  buildCommitArgs,
+  resolvePushArgs,
+  validatePRCheckout,
+  resolveCommitMessage,
+} = require('./commit.js')
 const { MARKER, buildComment, buildSummary } = require('./comment.js')
 const { upsertComment } = require('./github.js')
 const { log, fail, warn, setOutput, setDefaultOutputs, eventPayload } = require('./workflow.js')
@@ -114,7 +121,7 @@ async function main() {
     }
 
     const commitMessage = resolveCommitMessage(inputs.message, inputs.skipCi)
-    git(['commit', '-m', commitMessage])
+    git(buildCommitArgs(commitMessage))
     const sha = git(['rev-parse', 'HEAD']).trim()
     log(`committed: ${sha}`)
 

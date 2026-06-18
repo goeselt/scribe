@@ -8,6 +8,7 @@ const { execFileSync, spawnSync } = require('node:child_process')
 function redactText(text) {
   return String(text ?? '')
     .replace(/\bhttps?:\/\/[^/\s:@]+:[^/\s@]+@/gi, (match) => match.replace(/\/\/.*@/, '//***@'))
+    .replace(/\bx-access-token:[^@\s]+@/gi, 'x-access-token:***@')
     .replace(/\bAUTHORIZATION:\s*(?:basic|bearer)\s+[A-Za-z0-9._~+/=-]+/gi, 'AUTHORIZATION: ***')
     .replace(/\b(x-access-token|access_token|client_secret)=([^&\s]+)/gi, '$1=***')
 }
