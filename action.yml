@@ -31,9 +31,9 @@ inputs:
     required: false
     default: 'false'
   github-token:
-    description: 'GitHub token used to create or update the PR comment on pull_request events.'
+    description: 'GitHub token used for git push and to create or update the PR comment on pull_request events.'
     required: false
-    default: ''
+    default: ${{ github.token }}
   pr-comment:
     description: 'Whether to create or update the explanatory PR comment on pull_request events.'
     required: false

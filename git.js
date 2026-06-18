@@ -22,7 +22,7 @@ function gitFailureHint(args) {
     return 'Check the Git identity and signing-key inputs. If signing is enabled, make sure the secret contains a valid base64-encoded private key.'
   }
   if (command === 'push') {
-    return 'Check that actions/checkout used a token with push access and that branch protection allows this commit.'
+    return 'Check that github-token has push access and that branch protection allows this commit.'
   }
   if (command === 'rev-parse') {
     return 'Run actions/checkout before Scribe so the workspace contains a Git checkout.'
@@ -47,12 +47,49 @@ function formatGitError(args, err) {
     .join(' ')
 }
 
-function git(args) {
+function git(args, options = {}) {
   try {
-    return execFileSync('git', args, { encoding: 'utf8' })
+    return execFileSync('git', args, { encoding: 'utf8', ...options })
   } catch (err) {
     throw new Error(formatGitError(args, err), { cause: err })
   }
+}
+
+function withTemporaryGitHubToken(token, fn) {
+  if (!token) return fn({})
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'scribe-askpass-'))
+  fs.chmodSync(dir, 0o700)
+  const askpass = path.join(dir, 'askpass.sh')
+  fs.writeFileSync(
+    askpass,
+    [
+      '#!/bin/sh',
+      'case "$1" in',
+      "  *Username*) printf '%s\\n' x-access-token ;;",
+      '  *) printf \'%s\\n\' "$SCRIBE_GITHUB_TOKEN" ;;',
+      'esac',
+      '',
+    ].join('\n'),
+    { mode: 0o700 },
+  )
+
+  try {
+    return fn({
+      env: {
+        ...process.env,
+        GIT_ASKPASS: askpass,
+        GIT_TERMINAL_PROMPT: '0',
+        SCRIBE_GITHUB_TOKEN: token,
+      },
+    })
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+}
+
+function gitPush(args, token, _git = git) {
+  return withTemporaryGitHubToken(token, (options) => _git(args, options))
 }
 
 function hasChanges() {
@@ -131,6 +168,7 @@ function rollbackCommit(sha, warn, log) {
 
 module.exports = {
   git,
+  gitPush,
   hasChanges,
   validateBranchRef,
   rollbackCommit,
@@ -140,4 +178,5 @@ module.exports = {
   removeTemporaryGnupgHome,
   importKey,
   enableSigning,
+  withTemporaryGitHubToken,
 }

@@ -24,6 +24,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Generate files
         run: npm run generate
@@ -35,6 +37,7 @@ jobs:
             generated/
             package-lock.json
           message: 'chore: update generated files'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
 For gitignored paths such as `dist/`, set `force: true`:
@@ -64,17 +67,17 @@ For signed commits, pass a base64-encoded private key and, if needed, override t
 
 ## Inputs
 
-| Input            | Required | Default                                                 | Description                                                           |
-| ---------------- | -------- | ------------------------------------------------------- | --------------------------------------------------------------------- |
-| `files`          | Yes      | --                                                      | Newline-separated list of files or directories to stage.              |
-| `message`        | Yes      | --                                                      | Commit message.                                                       |
-| `git-user-name`  | No       | `github-actions[bot]`                                   | Git author name.                                                      |
-| `git-user-email` | No       | `41898282+github-actions[bot]@users.noreply.github.com` | Git author email.                                                     |
-| `signing-key`    | No       | `''`                                                    | Base64-encoded GPG signing key. When omitted, commits are unsigned.   |
-| `force`          | No       | `false`                                                 | Pass `--force` to `git add`. Required for gitignored paths.           |
-| `github-token`   | No       | `''`                                                    | Token used to create or update the PR comment on pull_request events. |
-| `pr-comment`     | No       | `true`                                                  | Whether to create or update the explanatory PR comment on PR events.  |
-| `skip-ci`        | No       | `true`                                                  | Whether to append `[skip ci]` to the commit message when absent.      |
+| Input            | Required | Default                                                 | Description                                                          |
+| ---------------- | -------- | ------------------------------------------------------- | -------------------------------------------------------------------- |
+| `files`          | Yes      | --                                                      | Newline-separated list of files or directories to stage.             |
+| `message`        | Yes      | --                                                      | Commit message.                                                      |
+| `git-user-name`  | No       | `github-actions[bot]`                                   | Git author name.                                                     |
+| `git-user-email` | No       | `41898282+github-actions[bot]@users.noreply.github.com` | Git author email.                                                    |
+| `signing-key`    | No       | `''`                                                    | Base64-encoded GPG signing key. When omitted, commits are unsigned.  |
+| `force`          | No       | `false`                                                 | Pass `--force` to `git add`. Required for gitignored paths.          |
+| `github-token`   | No       | `${{ github.token }}`                                   | Token used for `git push` and pull request comments.                 |
+| `pr-comment`     | No       | `true`                                                  | Whether to create or update the explanatory PR comment on PR events. |
+| `skip-ci`        | No       | `true`                                                  | Whether to append `[skip ci]` to the commit message when absent.     |
 
 ## Outputs
 
@@ -87,6 +90,10 @@ For signed commits, pass a base64-encoded private key and, if needed, override t
 
 Scribe appends a workflow summary entry after each invocation, including the result, files, commit SHA, push target,
 signing mode, and force-add mode.
+
+Scribe uses `github-token` as temporary Git authentication for `git push` and removes the helper before the action
+exits. Prefer `persist-credentials: false` in the preceding `actions/checkout` step so checkout credentials do not stay
+configured in the local repository.
 
 If Scribe creates a commit but the push fails, it rolls back the local commit before failing the step. The generated
 files remain in the workspace for logs or follow-up diagnostics.
@@ -132,6 +139,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
 
       - name: Generate files
         run: npm run generate
