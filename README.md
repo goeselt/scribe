@@ -101,7 +101,8 @@ permissions:
 ```
 
 When Scribe runs more than once, every created commit is merged into the same PR comment. The newest commit is listed
-first. Runs that produce no commit are reported in the workflow summary only.
+first. Scribe keeps the newest 50 commit records in the shared comment. Runs that produce no commit are reported in the
+workflow summary only.
 
 ## Pull Request Context
 
@@ -154,6 +155,9 @@ Fork pull requests are rejected before files are staged or committed.
 >
 > Pushing with `GITHUB_TOKEN` does **not** trigger new workflow runs, but `GITHUB_TOKEN` cannot bypass branch protection
 > rules.
+>
+> If Scribe commits changes under `.github/workflows/`, the checkout token may need permission to update workflows
+> (for example the `workflow` scope on a PAT).
 
 ## Contributing
 

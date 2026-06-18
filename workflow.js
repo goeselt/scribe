@@ -27,6 +27,11 @@ function setOutput(name, value, env = process.env) {
   fs.appendFileSync(outputFile, `${name}=${value}\n`)
 }
 
+function setDefaultOutputs(env = process.env) {
+  setOutput('committed', 'false', env)
+  setOutput('sha', '', env)
+}
+
 function eventPayload(env = process.env) {
   const eventPath = env.GITHUB_EVENT_PATH
   if (!eventPath) return {}
@@ -39,5 +44,6 @@ module.exports = {
   fail,
   warn,
   setOutput,
+  setDefaultOutputs,
   eventPayload,
 }

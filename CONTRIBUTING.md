@@ -23,6 +23,7 @@ Keep `index.js` close to that sequence. Put reusable details in the small module
 - `index.js` is committed as-is and referenced directly by `action.yml` (`runs.using: node24`).
 - Keep modules flat. Add a new module only when it names a real responsibility.
 - Treat error messages and workflow summaries as user-facing API. Test them when changing behavior.
+- Keep secrets out of logs. Git command output passes through `git.js` redaction before it reaches annotations.
 - Avoid supporting extra modes until a real workflow needs them.
 
 ## Files
@@ -56,6 +57,8 @@ Fork PRs are rejected before staging files. Detached merge checkouts are rejecte
 - PR push behavior: update `commit.js`, `commit.test.js`, and the README's pull request section.
 - Summary or PR comment output: update `comment.js`, `comment.test.js`, and screenshots/examples if any are added later.
 - GitHub API behavior: update `github.js` and `github.test.js`.
+- Comment history behavior: keep the shared PR comment bounded; `comment.js` intentionally retains only the newest
+  records.
 
 ## Local Verification
 

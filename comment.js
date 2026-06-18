@@ -2,6 +2,7 @@
 
 const MARKER = '<!-- scribe -->'
 const RECORDS_RE = /<!-- scribe-records: ([A-Za-z0-9+/=]+) -->/
+const MAX_COMMENT_RECORDS = 50
 
 function clean(str) {
   return String(str ?? '')
@@ -88,7 +89,7 @@ function commentTable(records) {
 }
 
 function buildComment(existingBody, record) {
-  const records = sortRecords(upsertRecord(parseRecords(existingBody), record))
+  const records = sortRecords(upsertRecord(parseRecords(existingBody), record)).slice(0, MAX_COMMENT_RECORDS)
   return [
     MARKER,
     `<!-- scribe-records: ${encodeRecords(records)} -->`,
@@ -119,4 +120,4 @@ function buildSummary(record) {
   return ['## Scribe', '', summaryTable(record), ''].join('\n')
 }
 
-module.exports = { MARKER, buildComment, buildSummary, parseRecords, upsertRecord }
+module.exports = { MARKER, MAX_COMMENT_RECORDS, buildComment, buildSummary, parseRecords, upsertRecord }

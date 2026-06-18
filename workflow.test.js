@@ -1,8 +1,11 @@
 'use strict'
 
+const fs = require('node:fs')
+const os = require('node:os')
+const path = require('node:path')
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { escapeWorkflowCommandValue, fail, warn, log } = require('./workflow.js')
+const { escapeWorkflowCommandValue, fail, warn, log, setDefaultOutputs } = require('./workflow.js')
 
 function captureStdout(fn) {
   const chunks = []
@@ -38,4 +41,13 @@ test('warn escapes annotation text', () => {
 test('log escapes workflow command control characters', () => {
   const output = captureStdout(() => log('alice\n::warning title=pwned::hi'))
   assert.equal(output, '[scribe] alice%0A::warning title=pwned::hi\n')
+})
+
+test('setDefaultOutputs writes stable initial outputs', () => {
+  const outputFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'scribe-output-')), 'out')
+
+  setDefaultOutputs({ GITHUB_OUTPUT: outputFile })
+
+  assert.equal(fs.readFileSync(outputFile, 'utf8'), 'committed=false\nsha=\n')
+  fs.rmSync(path.dirname(outputFile), { recursive: true, force: true })
 })

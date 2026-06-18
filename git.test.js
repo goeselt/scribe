@@ -3,7 +3,14 @@
 const fs = require('node:fs')
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { formatGitError, createTemporaryGnupgHome, removeTemporaryGnupgHome, importKey } = require('./git.js')
+const {
+  validateBranchRef,
+  redactText,
+  formatGitError,
+  createTemporaryGnupgHome,
+  removeTemporaryGnupgHome,
+  importKey,
+} = require('./git.js')
 
 test('formatGitError includes command output and an action-oriented push hint', () => {
   const message = formatGitError(['push'], {
@@ -23,6 +30,41 @@ test('formatGitError includes a checkout hint for rev-parse failures', () => {
   })
 
   assert.match(message, /Run actions\/checkout before Scribe/)
+})
+
+test('redactText removes credentials from Git output', () => {
+  const text = [
+    'remote: https://x-access-token:ghs_secret123@github.com/owner/repo.git',
+    'AUTHORIZATION: basic abc123+/=',
+    'https://github.com/owner/repo?access_token=secret&x=1',
+  ].join('\n')
+
+  const redacted = redactText(text)
+
+  assert.ok(!redacted.includes('ghs_secret123'))
+  assert.ok(!redacted.includes('abc123'))
+  assert.ok(!redacted.includes('access_token=secret'))
+  assert.ok(redacted.includes('https://***@github.com/owner/repo.git'))
+  assert.ok(redacted.includes('AUTHORIZATION: ***'))
+  assert.ok(redacted.includes('access_token=***'))
+})
+
+test('formatGitError redacts secrets from command output', () => {
+  const message = formatGitError(['push'], {
+    status: 128,
+    stderr: Buffer.from('fatal: https://user:token123@example.com/owner/repo.git failed', 'utf8'),
+  })
+
+  assert.ok(!message.includes('token123'))
+  assert.ok(message.includes('https://***@example.com/owner/repo.git'))
+})
+
+test('validateBranchRef accepts a normal branch name', () => {
+  assert.doesNotThrow(() => validateBranchRef('feature/scribe-hardening'))
+})
+
+test('validateBranchRef rejects an invalid branch name', () => {
+  assert.throws(() => validateBranchRef('bad..branch'), /git check-ref-format --branch bad\.\.branch failed/)
 })
 
 test('createTemporaryGnupgHome creates a private directory that can be removed', () => {

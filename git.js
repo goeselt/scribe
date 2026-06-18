@@ -5,6 +5,13 @@ const os = require('node:os')
 const path = require('node:path')
 const { execFileSync, spawnSync } = require('node:child_process')
 
+function redactText(text) {
+  return String(text ?? '')
+    .replace(/\bhttps?:\/\/[^/\s:@]+:[^/\s@]+@/gi, (match) => match.replace(/\/\/.*@/, '//***@'))
+    .replace(/\bAUTHORIZATION:\s*(?:basic|bearer)\s+[A-Za-z0-9._~+/=-]+/gi, 'AUTHORIZATION: ***')
+    .replace(/\b(x-access-token|access_token|client_secret)=([^&\s]+)/gi, '$1=***')
+}
+
 function gitFailureHint(args) {
   const command = args[0]
   if (command === 'add') {
@@ -19,13 +26,19 @@ function gitFailureHint(args) {
   if (command === 'rev-parse') {
     return 'Run actions/checkout before Scribe so the workspace contains a Git checkout.'
   }
+  if (command === 'check-ref-format') {
+    return 'Use a valid branch name for the pull request head ref.'
+  }
+  if (args.join(' ').includes('safe.directory') || command === 'diff') {
+    return 'If Git reports dubious ownership on a self-hosted runner, add the checkout path to safe.directory.'
+  }
   return ''
 }
 
 function formatGitError(args, err) {
   const status = typeof err?.status === 'number' ? ` (exit ${err.status})` : ''
-  const stderr = (err?.stderr ?? Buffer.alloc(0)).toString('utf8').trim()
-  const stdout = (err?.stdout ?? Buffer.alloc(0)).toString('utf8').trim()
+  const stderr = redactText((err?.stderr ?? Buffer.alloc(0)).toString('utf8')).trim()
+  const stdout = redactText((err?.stdout ?? Buffer.alloc(0)).toString('utf8')).trim()
   const details = stderr || stdout
   const hint = gitFailureHint(args)
   return [
@@ -50,6 +63,13 @@ function hasChanges() {
   const result = spawnSync('git', args, { stdio: ['ignore', 'pipe', 'pipe'] })
   if (result.status === 0) return false
   if (result.status === 1) return true
+  throw new Error(formatGitError(args, result))
+}
+
+function validateBranchRef(ref) {
+  const args = ['check-ref-format', '--branch', ref]
+  const result = spawnSync('git', args, { stdio: ['ignore', 'pipe', 'pipe'] })
+  if (result.status === 0) return
   throw new Error(formatGitError(args, result))
 }
 
@@ -115,7 +135,9 @@ function rollbackCommit(sha, warn, log) {
 module.exports = {
   git,
   hasChanges,
+  validateBranchRef,
   rollbackCommit,
+  redactText,
   formatGitError,
   createTemporaryGnupgHome,
   removeTemporaryGnupgHome,

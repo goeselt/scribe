@@ -2,11 +2,11 @@
 
 const fs = require('node:fs')
 const { readInputs } = require('./inputs.js')
-const { git, hasChanges, rollbackCommit, enableSigning } = require('./git.js')
+const { git, hasChanges, validateBranchRef, rollbackCommit, enableSigning } = require('./git.js')
 const { parseFiles, buildAddArgs, resolvePushArgs, validatePRCheckout, resolveCommitMessage } = require('./commit.js')
 const { MARKER, buildComment, buildSummary } = require('./comment.js')
 const { upsertComment } = require('./github.js')
-const { log, fail, warn, setOutput, eventPayload } = require('./workflow.js')
+const { log, fail, warn, setOutput, setDefaultOutputs, eventPayload } = require('./workflow.js')
 
 function isPREvent(eventName) {
   return eventName === 'pull_request' || eventName === 'pull_request_target'
@@ -71,6 +71,8 @@ async function main() {
   const repo = process.env.GITHUB_REPOSITORY ?? ''
   const payload = eventPayload()
 
+  setDefaultOutputs()
+
   log(
     `event=${eventName || '-'} force=${inputs.force} signing=${inputs.signingKey ? 'yes' : 'no'} pr-comment=${inputs.postComment} skip-ci=${inputs.skipCi}`,
   )
@@ -81,6 +83,7 @@ async function main() {
     if (!inputs.message.trim()) throw new Error('message input is empty')
 
     const pushArgs = resolvePushArgs(eventName, headRef, payload)
+    if (isPREvent(eventName)) validateBranchRef(payload.pull_request.head.ref)
     validatePRCheckout(eventName, payload, git(['rev-parse', 'HEAD']).trim())
 
     git(['config', 'user.name', inputs.userName])
@@ -97,8 +100,6 @@ async function main() {
 
     if (!hasChanges()) {
       log('no staged changes -- skipping commit')
-      setOutput('committed', 'false')
-      setOutput('sha', '')
       writeSummary({
         committed: false,
         sha: '',

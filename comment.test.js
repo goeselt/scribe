@@ -2,7 +2,7 @@
 
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { MARKER, buildComment, buildSummary, parseRecords, upsertRecord } = require('./comment.js')
+const { MARKER, MAX_COMMENT_RECORDS, buildComment, buildSummary, parseRecords, upsertRecord } = require('./comment.js')
 
 const versionRecord = {
   committed: true,
@@ -83,6 +83,26 @@ test('buildComment merges records from duplicate existing comments', () => {
     parseRecords(merged).map((r) => r.sha),
     ['abcdef1234567890', '1234567890abcdef'],
   )
+})
+
+test('buildComment keeps only the newest records', () => {
+  let comment = ''
+
+  for (let i = 0; i < MAX_COMMENT_RECORDS + 5; i++) {
+    const id = String(i).padStart(2, '0')
+    comment = buildComment(comment, {
+      ...versionRecord,
+      sha: `sha-${id}`,
+      committedAt: `2026-06-07T12:${id}:00+00:00`,
+      message: `commit ${id}`,
+    })
+  }
+
+  const records = parseRecords(comment)
+  assert.equal(records.length, MAX_COMMENT_RECORDS)
+  assert.equal(records[0].sha, `sha-${String(MAX_COMMENT_RECORDS + 4).padStart(2, '0')}`)
+  assert.equal(records.at(-1).sha, 'sha-05')
+  assert.equal(records.some((r) => r.sha === 'sha-00'), false)
 })
 
 test('buildSummary renders committed and skipped records', () => {
