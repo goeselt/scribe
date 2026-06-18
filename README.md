@@ -91,9 +91,11 @@ For signed commits, pass a base64-encoded private key and, if needed, override t
 Scribe appends a workflow summary entry after each invocation, including the result, files, commit SHA, push target,
 signing mode, and force-add mode.
 
-Scribe uses `github-token` as temporary Git authentication for `git push` and removes the helper before the action
-exits. Prefer `persist-credentials: false` in the preceding `actions/checkout` step so checkout credentials do not stay
-configured in the local repository.
+Scribe uses `github-token` as request-scoped authentication for `git push`. The token is passed only through the push
+command's environment (never `process.env` or the local Git config) as a temporary `http.<server>.extraheader`, which
+also overrides any credential the preceding `actions/checkout` step persisted. `persist-credentials: false` is therefore
+recommended but not required. This path requires Git >= 2.31 on the runner. The shared PR comment uses the same token
+directly against the GitHub REST API.
 
 If Scribe creates a commit but the push fails, it rolls back the local commit before failing the step. The generated
 files remain in the workspace for logs or follow-up diagnostics.

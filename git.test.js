@@ -1,7 +1,6 @@
 'use strict'
 
 const fs = require('node:fs')
-const { execFileSync } = require('node:child_process')
 const test = require('node:test')
 const assert = require('node:assert/strict')
 const {
@@ -12,7 +11,6 @@ const {
   createTemporaryGnupgHome,
   removeTemporaryGnupgHome,
   importKey,
-  withTemporaryGitHubToken,
 } = require('./git.js')
 
 test('formatGitError includes command output and an action-oriented push hint', () => {
@@ -65,30 +63,7 @@ test('formatGitError redacts secrets from command output', () => {
   assert.ok(message.includes('https://***@example.com/owner/repo.git'))
 })
 
-test('withTemporaryGitHubToken provides askpass credentials and removes them afterwards', () => {
-  let askpass = ''
-  const result = withTemporaryGitHubToken('ghs_secret', ({ env }) => {
-    askpass = env.GIT_ASKPASS
-    assert.equal(env.GIT_TERMINAL_PROMPT, '0')
-    assert.equal(env.SCRIBE_GITHUB_TOKEN, 'ghs_secret')
-    assert.equal(fs.statSync(askpass).mode & 0o777, 0o700)
-    assert.equal(fs.readFileSync(askpass, 'utf8').includes('ghs_secret'), false)
-    assert.equal(
-      execFileSync(askpass, ['Username for https://github.com'], { encoding: 'utf8', env }).trim(),
-      'x-access-token',
-    )
-    assert.equal(
-      execFileSync(askpass, ['Password for https://github.com'], { encoding: 'utf8', env }).trim(),
-      'ghs_secret',
-    )
-    return 'ok'
-  })
-
-  assert.equal(result, 'ok')
-  assert.equal(fs.existsSync(askpass), false)
-})
-
-test('gitPush uses temporary token environment only for the push command', () => {
+test('gitPush uses request-scoped GitHub token configuration for the push command', () => {
   const calls = []
 
   gitPush(['push'], 'ghs_secret', (args, options) => {
@@ -96,10 +71,19 @@ test('gitPush uses temporary token environment only for the push command', () =>
     return ''
   })
 
+  // The exact GIT_CONFIG_* indices depend on what the environment already set and are covered
+  // by github-auth.test.js; here we only assert that the push command receives the auth env.
+  const { env } = calls[0].options
   assert.deepEqual(calls[0].args, ['push'])
-  assert.equal(calls[0].options.env.SCRIBE_GITHUB_TOKEN, 'ghs_secret')
-  assert.match(calls[0].options.env.GIT_ASKPASS, /scribe-askpass-/)
-  assert.equal(fs.existsSync(calls[0].options.env.GIT_ASKPASS), false)
+  assert.equal(env.GIT_TERMINAL_PROMPT, '0')
+  assert.equal(
+    Object.values(env).some((value) => String(value).startsWith('Authorization: Basic ')),
+    true,
+  )
+  assert.equal(
+    Object.values(env).some((value) => String(value).includes('ghs_secret')),
+    false,
+  )
 })
 
 test('gitPush falls back to existing Git credentials when no token is provided', () => {
@@ -110,7 +94,7 @@ test('gitPush falls back to existing Git credentials when no token is provided',
     return ''
   })
 
-  assert.deepEqual(calls, [{ args: ['push'], options: {} }])
+  assert.deepEqual(calls, [{ args: ['push'], options: undefined }])
 })
 
 test('validateBranchRef accepts a normal branch name', () => {

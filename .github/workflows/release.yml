@@ -34,7 +34,7 @@ jobs:
         with:
           fetch-depth: 0 # intent release needs full history to find the previous release tag
           token: ${{ steps.app.outputs.token }}
-          persist-credentials: false # Scribe uses github-token only while pushing
+          persist-credentials: false
 
       - id: intent
         name: Intent Release
@@ -61,7 +61,7 @@ jobs:
 
       - name: Release
         if: steps.intent.outputs.release-needed == 'true'
-        uses: goeselt/dispatch@300efd719ae6ba24758bb24a9df097c9c5f87dd9 # v1.1.0
+        uses: goeselt/dispatch@3f631284a1b7e62bd0d11f954d3b1acc64fdbabc # v1.2.0
         with:
           release-tag: ${{ steps.intent.outputs.release-tag }}
           major-tag: ${{ steps.intent.outputs.major-tag }}
