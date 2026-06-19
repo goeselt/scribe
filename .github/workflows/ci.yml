@@ -3,7 +3,6 @@ name: CI
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, edited]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -25,25 +24,31 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - name: Validate Intent
-        uses: goeselt/intent@21b70d0a25a0aae8002ca2c7fb4f4b3ba604922e # v1.1.2
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          pr-comment: true
-
-      # The `edited` trigger fires on PR title/body changes (needed to re-validate intent) but touches no code,
-      # so skip everything else in that case.
       - name: Checkout
-        if: github.event.action != 'edited'
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 1
           persist-credentials: false
 
       - name: Run Tests
-        if: github.event.action != 'edited'
         run: npm test
 
       - name: Pedant
-        if: github.event.action != 'edited'
-        uses: goeselt/pedant@052c9c1cec0436f4dacb44e4579bbff562d57b1f # v1.2.0
+        id: pedant
+        continue-on-error: true
+        uses: goeselt/pedant@a62f5beea373a55846791c2113ceacd07f114826 # v1.2.2
+        with:
+          summary-github-step: true
+
+      - name: Publish Pedant Report
+        if: always()
+        uses: goeselt/remark@b5a3f7c0d7b25e6634f1f2f9ef13e6b808370972 # v1.0.3
+        with:
+          body: ${{ steps.pedant.outputs.summary }}
+          comment-key: pedant
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          skip-unchanged: true
+
+      - name: Fail On Pedant Findings
+        if: steps.pedant.outcome != 'success'
+        run: exit 1
