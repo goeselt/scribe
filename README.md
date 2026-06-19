@@ -93,7 +93,7 @@ signing mode, and force-add mode.
 
 `github-token` defaults to `${{ github.token }}`; `contents: write` covers the standard commit-and-push case. The token
 is injected per command only, never written to `.git/config` or retained in the process environment, and removed after
-each call — so `persist-credentials: false` on the checkout step is recommended but not required.
+each call -- so `persist-credentials: false` on the checkout step is recommended but not required.
 
 If Scribe creates a commit but the push fails, it rolls back the local commit before failing the step. The generated
 files remain in the workspace for logs or follow-up diagnostics.
