@@ -9,6 +9,7 @@ const {
   buildComment,
   buildFooter,
   buildSummary,
+  commitUrl,
   parseRecords,
   upsertRecord,
 } = require('./comment.js')
@@ -151,6 +152,20 @@ test('buildComment renders a linked commit SHA when repo is present', () => {
   const comment = buildComment('', versionRecord)
   assert.ok(comment.includes('https://github.com/owner/repo/commit/1234567890abcdef'))
   assert.ok(comment.includes('1234567 committed 2 files'))
+})
+
+test('commit links use GITHUB_SERVER_URL on enterprise hosts', () => {
+  const previous = process.env.GITHUB_SERVER_URL
+  process.env.GITHUB_SERVER_URL = 'https://company.ghe.com/'
+
+  try {
+    assert.equal(commitUrl('owner/repo', '1234567'), 'https://company.ghe.com/owner/repo/commit/1234567')
+    assert.ok(buildSummary(versionRecord).includes('https://company.ghe.com/owner/repo/commit/1234567890abcdef'))
+    assert.ok(buildComment('', versionRecord).includes('https://company.ghe.com/owner/repo/commit/1234567890abcdef'))
+  } finally {
+    if (previous === undefined) delete process.env.GITHUB_SERVER_URL
+    else process.env.GITHUB_SERVER_URL = previous
+  }
 })
 
 test('buildComment renders a plain SHA when repo is absent', () => {
