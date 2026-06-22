@@ -4,7 +4,14 @@ const { EventEmitter } = require('node:events')
 const https = require('node:https')
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { upsertComment, normalizeLoginHint, authenticatedLogin, listComments, request, requestOptions } = require('./github.js')
+const {
+  upsertComment,
+  normalizeLoginHint,
+  authenticatedLogin,
+  listComments,
+  request,
+  requestOptions,
+} = require('./github.js')
 const { MARKER, buildComment, parseRecords } = require('./comment.js')
 
 const recordA = {
