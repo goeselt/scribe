@@ -113,18 +113,26 @@ function filesCell(files) {
   return list.map((f) => cell(f, 60)).join('<br>')
 }
 
+function githubServerUrl() {
+  return (process.env.GITHUB_SERVER_URL || 'https://github.com').replace(/\/+$/, '')
+}
+
+function commitUrl(repo, sha) {
+  return `${githubServerUrl()}/${repo}/commit/${sha}`
+}
+
 function commitCell(r) {
   const sha7 = shortSha(r.sha)
   const count = r.files?.length ?? 0
   const noun = count === 1 ? 'file' : 'files'
   const label = `${sha7} committed ${count} ${noun}`
-  if (r.repo && r.sha) return `[${label}](https://github.com/${r.repo}/commit/${r.sha})`
+  if (r.repo && r.sha) return `[${label}](${commitUrl(r.repo, r.sha)})`
   return label
 }
 
 function summaryCommitCell(record) {
   if (!record.sha) return '--'
-  if (record.repo) return `[${record.sha}](https://github.com/${record.repo}/commit/${record.sha})`
+  if (record.repo) return `[${record.sha}](${commitUrl(record.repo, record.sha)})`
   return `\`${record.sha}\``
 }
 
@@ -178,6 +186,7 @@ module.exports = {
   buildComment,
   buildFooter,
   buildSummary,
+  commitUrl,
   parseRecords,
   upsertRecord,
 }

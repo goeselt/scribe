@@ -4,21 +4,34 @@ const https = require('node:https')
 
 const DEFAULT_TIMEOUT_MS = 10000
 
+function githubApiBase() {
+  const base = new URL(process.env.GITHUB_API_URL || 'https://api.github.com')
+  if (base.protocol !== 'https:') throw new Error(`GITHUB_API_URL must use https, got ${base.protocol}`)
+  return base
+}
+
+function requestOptions(method, path, token, payload) {
+  const base = githubApiBase()
+  const basePath = base.pathname.replace(/\/+$/, '')
+  return {
+    hostname: base.hostname,
+    port: base.port || undefined,
+    path: `${basePath}${path}`,
+    method,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      'User-Agent': 'scribe',
+      ...(payload ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) } : {}),
+    },
+  }
+}
+
 function request(method, path, token, body) {
   return new Promise((resolve, reject) => {
     const payload = body ? JSON.stringify(body) : undefined
-    const options = {
-      hostname: 'api.github.com',
-      path,
-      method,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-        'User-Agent': 'scribe',
-        ...(payload ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) } : {}),
-      },
-    }
+    const options = requestOptions(method, path, token, payload)
 
     const req = https.request(options, (res) => {
       const chunks = []
@@ -140,4 +153,4 @@ function normalize(text) {
   return String(text ?? '').replace(/\r\n/g, '\n')
 }
 
-module.exports = { upsertComment, normalizeLoginHint, authenticatedLogin, listComments, request }
+module.exports = { upsertComment, normalizeLoginHint, authenticatedLogin, listComments, request, requestOptions }

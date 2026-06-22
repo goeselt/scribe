@@ -36,7 +36,7 @@ jobs:
       - name: Pedant
         id: pedant
         continue-on-error: true
-        uses: goeselt/pedant@b8e404a982679f74a8cd9309de5d2492bc8030c3 # v1.2.3
+        uses: goeselt/pedant@13ee279ee25edf247435a1e833de83a3f13c4616 # v1.2.5
         with:
           summary-github-step: true
 
@@ -46,7 +46,6 @@ jobs:
         with:
           body: ${{ steps.pedant.outputs.summary }}
           comment-key: pedant
-          github-token: ${{ secrets.GITHUB_TOKEN }}
           skip-unchanged: true
 
       - name: Fail On Pedant Findings

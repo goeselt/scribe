@@ -4,7 +4,14 @@ const { EventEmitter } = require('node:events')
 const https = require('node:https')
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { upsertComment, normalizeLoginHint, authenticatedLogin, listComments, request } = require('./github.js')
+const {
+  upsertComment,
+  normalizeLoginHint,
+  authenticatedLogin,
+  listComments,
+  request,
+  requestOptions,
+} = require('./github.js')
 const { MARKER, buildComment, parseRecords } = require('./comment.js')
 
 const recordA = {
@@ -301,5 +308,19 @@ test('request times out stalled GitHub API calls', async () => {
     assert.match(destroyedWith.message, /timed out after 10000ms/)
   } finally {
     https.request = originalRequest
+  }
+})
+
+test('requestOptions uses GITHUB_API_URL including enterprise path prefix', () => {
+  const previous = process.env.GITHUB_API_URL
+  process.env.GITHUB_API_URL = 'https://company.ghe.com/api/v3/'
+
+  try {
+    const options = requestOptions('GET', '/repos/owner/repo/issues/7/comments', 'token')
+    assert.equal(options.hostname, 'company.ghe.com')
+    assert.equal(options.path, '/api/v3/repos/owner/repo/issues/7/comments')
+  } finally {
+    if (previous === undefined) delete process.env.GITHUB_API_URL
+    else process.env.GITHUB_API_URL = previous
   }
 })
