@@ -25,6 +25,10 @@ test('boolInput throws for values other than true or false', () => {
   assert.throws(() => boolInput('TEST-BOOL', false, { 'INPUT_TEST-BOOL': 'yes' }), /must be "true" or "false"/)
 })
 
+test('boolInput reports the action input name in workflow casing', () => {
+  assert.throws(() => boolInput('PR-COMMENT', true, { 'INPUT_PR-COMMENT': 'yes' }), /^Error: pr-comment must be/)
+})
+
 test('resolveGitIdentity uses the github-actions bot by default', () => {
   assert.deepEqual(resolveGitIdentity('', '  '), {
     userName: 'github-actions[bot]',
@@ -37,6 +41,11 @@ test('resolveGitIdentity preserves explicit identity inputs after trimming', () 
     userName: 'release-bot',
     userEmail: 'release@example.com',
   })
+})
+
+test('resolveGitIdentity rejects identity values that would parse as git options', () => {
+  assert.throws(() => resolveGitIdentity('--global', 'release@example.com'), /git-user-name must not start with "-"/)
+  assert.throws(() => resolveGitIdentity('release-bot', '--file=/tmp/evil'), /git-user-email must not start with "-"/)
 })
 
 test('readInputs returns normalized action inputs', () => {

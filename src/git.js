@@ -103,24 +103,47 @@ function importKey(base64Key, gnupgHome, _spawnSync = spawnSync) {
   }
 }
 
+// readGitConfig returns the repository-local value for key, or null when the key is unset locally.
+// Scoped to --local because that is the scope Scribe writes to; reading merged config would copy a global
+// value into the repository config on restore.
+function readGitConfig(key, _spawnSync = spawnSync) {
+  const args = ['config', '--local', '--get', key]
+  const result = _spawnSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+  if (result.status === 0) return String(result.stdout ?? '').trim()
+  return null
+}
+
+// restoreGitConfig writes back a value captured with readGitConfig, unsetting the key when it was null.
+// Best-effort: cleanup runs in a finally block and must not mask the original error.
+function restoreGitConfig(key, previousValue, _spawnSync = spawnSync) {
+  const args =
+    previousValue === null ? ['config', '--local', '--unset', key] : ['config', '--local', key, previousValue]
+  _spawnSync('git', args, { stdio: 'ignore' })
+}
+
 function enableSigning(base64Key) {
   const previousGnupgHome = process.env.GNUPGHOME
+  const previousGpgsign = readGitConfig('commit.gpgsign')
   const gnupgHome = createTemporaryGnupgHome()
   process.env.GNUPGHOME = gnupgHome
+
+  const cleanup = () => {
+    restoreGnupgHome(previousGnupgHome)
+    // The imported key is removed with the temporary GNUPGHOME; leaving commit.gpgsign=true behind would make
+    // every later git commit in the job fail to sign.
+    restoreGitConfig('commit.gpgsign', previousGpgsign)
+    removeTemporaryGnupgHome(gnupgHome)
+  }
 
   try {
     importKey(base64Key, gnupgHome)
     git(['config', 'commit.gpgsign', 'true'])
   } catch (err) {
-    restoreGnupgHome(previousGnupgHome)
-    removeTemporaryGnupgHome(gnupgHome)
+    cleanup()
     throw err
   }
 
-  return () => {
-    restoreGnupgHome(previousGnupgHome)
-    removeTemporaryGnupgHome(gnupgHome)
-  }
+  return cleanup
 }
 
 function restoreGnupgHome(previousGnupgHome) {
@@ -149,5 +172,7 @@ module.exports = {
   createTemporaryGnupgHome,
   removeTemporaryGnupgHome,
   importKey,
+  readGitConfig,
+  restoreGitConfig,
   enableSigning,
 }

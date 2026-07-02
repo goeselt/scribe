@@ -93,8 +93,8 @@ async function main() {
     if (isPREvent(eventName)) validateBranchRef(payload.pull_request.head.ref)
     validatePRCheckout(eventName, payload, git(['rev-parse', 'HEAD']).trim())
 
-    git(['config', 'user.name', inputs.userName])
-    git(['config', 'user.email', inputs.userEmail])
+    git(['config', '--', 'user.name', inputs.userName])
+    git(['config', '--', 'user.email', inputs.userEmail])
     log(`identity: ${inputs.userName} <${inputs.userEmail}>`)
 
     if (inputs.signingKey) {

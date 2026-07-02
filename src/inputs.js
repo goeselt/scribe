@@ -11,13 +11,20 @@ function boolInput(name, fallback, env = process.env) {
   const raw = input(name, env).trim().toLowerCase() || (fallback ? 'true' : 'false')
   if (raw === 'true') return true
   if (raw === 'false') return false
-  throw new Error(`${name} must be "true" or "false", got ${JSON.stringify(raw)}`)
+  throw new Error(`${name.toLowerCase()} must be "true" or "false", got ${JSON.stringify(raw)}`)
+}
+
+// A leading dash would let an identity value be parsed as a git option (e.g. --file=<path>) instead of a config value.
+function identityValue(name, value, fallback) {
+  const text = String(value ?? '').trim() || fallback
+  if (text.startsWith('-')) throw new Error(`${name} must not start with "-", got ${JSON.stringify(text)}`)
+  return text
 }
 
 function resolveGitIdentity(userName, userEmail) {
   return {
-    userName: String(userName ?? '').trim() || DEFAULT_GIT_USER_NAME,
-    userEmail: String(userEmail ?? '').trim() || DEFAULT_GIT_USER_EMAIL,
+    userName: identityValue('git-user-name', userName, DEFAULT_GIT_USER_NAME),
+    userEmail: identityValue('git-user-email', userEmail, DEFAULT_GIT_USER_EMAIL),
   }
 }
 
