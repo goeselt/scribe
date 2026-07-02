@@ -24,7 +24,10 @@ function warn(message) {
 function setOutput(name, value, env = process.env) {
   const outputFile = env.GITHUB_OUTPUT
   if (!outputFile) return
-  fs.appendFileSync(outputFile, `${name}=${value}\n`)
+  const text = String(value ?? '')
+  // GITHUB_OUTPUT is line-based; a line break in the value would inject additional outputs.
+  if (/[\r\n]/.test(text)) throw new Error(`output ${name} must be a single line, got ${JSON.stringify(text)}`)
+  fs.appendFileSync(outputFile, `${name}=${text}\n`)
 }
 
 function setDefaultOutputs(env = process.env) {
@@ -35,7 +38,13 @@ function setDefaultOutputs(env = process.env) {
 function eventPayload(env = process.env) {
   const eventPath = env.GITHUB_EVENT_PATH
   if (!eventPath) return {}
-  return JSON.parse(fs.readFileSync(eventPath, 'utf8'))
+  try {
+    return JSON.parse(fs.readFileSync(eventPath, 'utf8'))
+  } catch (err) {
+    throw new Error(`could not read the event payload from GITHUB_EVENT_PATH (${eventPath}): ${err.message}`, {
+      cause: err,
+    })
+  }
 }
 
 module.exports = {

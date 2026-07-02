@@ -5,7 +5,9 @@ const https = require('node:https')
 const DEFAULT_TIMEOUT_MS = 10000
 
 function githubApiBase() {
-  const base = new URL(process.env.GITHUB_API_URL || 'https://api.github.com')
+  const raw = process.env.GITHUB_API_URL
+  if (!raw) throw new Error('GITHUB_API_URL is not set; cannot resolve the GitHub API base URL')
+  const base = new URL(raw)
   if (base.protocol !== 'https:') throw new Error(`GITHUB_API_URL must use https, got ${base.protocol}`)
   return base
 }

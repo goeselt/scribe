@@ -5,7 +5,15 @@ const os = require('node:os')
 const path = require('node:path')
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { escapeWorkflowCommandValue, fail, warn, log, setDefaultOutputs } = require('./workflow.js')
+const {
+  escapeWorkflowCommandValue,
+  fail,
+  warn,
+  log,
+  setOutput,
+  setDefaultOutputs,
+  eventPayload,
+} = require('./workflow.js')
 
 function captureStdout(fn) {
   const chunks = []
@@ -50,4 +58,40 @@ test('setDefaultOutputs writes stable initial outputs', () => {
 
   assert.equal(fs.readFileSync(outputFile, 'utf8'), 'committed=false\nsha=\n')
   fs.rmSync(path.dirname(outputFile), { recursive: true, force: true })
+})
+
+test('setOutput rejects multi-line values instead of injecting extra outputs', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'scribe-output-'))
+  const outputFile = path.join(dir, 'out')
+
+  assert.throws(
+    () => setOutput('sha', 'abc123\ncommitted=true', { GITHUB_OUTPUT: outputFile }),
+    /output sha must be a single line/,
+  )
+
+  assert.equal(fs.existsSync(outputFile), false)
+  fs.rmSync(dir, { recursive: true, force: true })
+})
+
+test('eventPayload parses the event file from GITHUB_EVENT_PATH', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'scribe-event-'))
+  const eventPath = path.join(dir, 'event.json')
+  fs.writeFileSync(eventPath, '{"action":"opened"}')
+
+  assert.deepEqual(eventPayload({ GITHUB_EVENT_PATH: eventPath }), { action: 'opened' })
+  fs.rmSync(dir, { recursive: true, force: true })
+})
+
+test('eventPayload names GITHUB_EVENT_PATH when the event file is unreadable or malformed', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'scribe-event-'))
+  const eventPath = path.join(dir, 'event.json')
+  fs.writeFileSync(eventPath, 'not json')
+
+  assert.throws(
+    () => eventPayload({ GITHUB_EVENT_PATH: eventPath }),
+    new RegExp(
+      `could not read the event payload from GITHUB_EVENT_PATH \\(${eventPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\)`,
+    ),
+  )
+  fs.rmSync(dir, { recursive: true, force: true })
 })

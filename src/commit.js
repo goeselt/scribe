@@ -16,21 +16,19 @@ function buildAddArgs(files, force) {
   return ['add', '--', ...files]
 }
 
-// buildCommitArgs disables repository hooks so an earlier workflow step cannot
-// inject code into Scribe's commit operation through core.hooksPath.
+// buildCommitArgs disables repository hooks so an earlier workflow step cannot inject code into Scribe's commit
+// operation through core.hooksPath.
 function buildCommitArgs(message) {
   return ['commit', '--no-verify', '-m', message]
 }
 
 // resolvePushArgs returns git-push arguments appropriate for the event context.
 //
-// On pull_request and pull_request_target events, push to the actual PR branch
-// head ref after the entry point verifies that the local checkout is the PR
-// head commit rather than a detached merge commit.
+// On pull_request and pull_request_target events, push to the actual PR branch head ref after the entry point verifies
+// that the local checkout is the PR head commit rather than a detached merge commit.
 //
-// Note: pushing with a GitHub App token or PAT triggers a new pull_request
-// workflow run on the PR branch. Include [skip ci] in the commit message to
-// suppress redundant CI on the pushed commit.
+// Note: pushing with a GitHub App token or PAT triggers a new pull_request workflow run on the PR branch.
+// Include [skip ci] in the commit message to suppress redundant CI on the pushed commit.
 function isPREvent(eventName) {
   return eventName === 'pull_request' || eventName === 'pull_request_target'
 }
@@ -72,8 +70,7 @@ function validatePRCheckout(eventName, payload = {}, currentSha = '') {
   }
 }
 
-// resolveCommitMessage optionally appends [skip ci] to prevent pushed commits
-// from triggering follow-up workflow runs.
+// resolveCommitMessage optionally appends [skip ci] to prevent pushed commits from triggering follow-up workflow runs.
 function resolveCommitMessage(message, skipCi) {
   if (!skipCi || message.includes('[skip ci]')) return message
   return `${message} [skip ci]`

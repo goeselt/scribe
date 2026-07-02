@@ -11,6 +11,8 @@ const {
   createTemporaryGnupgHome,
   removeTemporaryGnupgHome,
   importKey,
+  readGitConfig,
+  restoreGitConfig,
 } = require('./git.js')
 
 test('formatGitError includes command output and an action-oriented push hint', () => {
@@ -66,13 +68,20 @@ test('formatGitError redacts secrets from command output', () => {
 test('gitPush uses request-scoped GitHub token configuration for the push command', () => {
   const calls = []
 
-  gitPush(['push'], 'ghs_secret', (args, options) => {
-    calls.push({ args, options })
-    return ''
-  })
+  const previousServerUrl = process.env.GITHUB_SERVER_URL
+  process.env.GITHUB_SERVER_URL = 'https://github.com'
+  try {
+    gitPush(['push'], 'ghs_secret', (args, options) => {
+      calls.push({ args, options })
+      return ''
+    })
+  } finally {
+    if (previousServerUrl === undefined) delete process.env.GITHUB_SERVER_URL
+    else process.env.GITHUB_SERVER_URL = previousServerUrl
+  }
 
-  // The exact GIT_CONFIG_* indices depend on what the environment already set and are covered
-  // by github-auth.test.js; here we only assert that the push command receives the auth env.
+  // The exact GIT_CONFIG_* indices depend on what the environment already set and are covered by github-auth.test.js;
+  // here we only assert that the push command receives the auth env.
   const { env } = calls[0].options
   assert.deepEqual(calls[0].args, ['push'])
   assert.equal(env.GIT_TERMINAL_PROMPT, '0')
@@ -131,6 +140,42 @@ test('importKey imports into the provided temporary GPG home', () => {
   assert.deepEqual(calls[0].args, ['--batch', '--import'])
   assert.equal(calls[0].options.env.GNUPGHOME, '/tmp/scribe-gnupg-test')
   assert.equal(calls[0].options.input.toString('utf8'), 'fake-private-key')
+})
+
+test('readGitConfig returns the locally configured value', () => {
+  const calls = []
+  const value = readGitConfig('commit.gpgsign', (cmd, args) => {
+    calls.push({ cmd, args })
+    return { status: 0, stdout: 'true\n' }
+  })
+
+  assert.equal(value, 'true')
+  assert.deepEqual(calls, [{ cmd: 'git', args: ['config', '--local', '--get', 'commit.gpgsign'] }])
+})
+
+test('readGitConfig returns null for an unset key', () => {
+  const value = readGitConfig('commit.gpgsign', () => ({ status: 1, stdout: '' }))
+  assert.equal(value, null)
+})
+
+test('restoreGitConfig writes back a previously configured value', () => {
+  const calls = []
+  restoreGitConfig('commit.gpgsign', 'false', (cmd, args) => {
+    calls.push({ cmd, args })
+    return { status: 0 }
+  })
+
+  assert.deepEqual(calls, [{ cmd: 'git', args: ['config', '--local', 'commit.gpgsign', 'false'] }])
+})
+
+test('restoreGitConfig unsets a key that was not configured before', () => {
+  const calls = []
+  restoreGitConfig('commit.gpgsign', null, (cmd, args) => {
+    calls.push({ cmd, args })
+    return { status: 0 }
+  })
+
+  assert.deepEqual(calls, [{ cmd: 'git', args: ['config', '--local', '--unset', 'commit.gpgsign'] }])
 })
 
 test('importKey reports GPG import failures', () => {

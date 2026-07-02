@@ -14,6 +14,9 @@ const {
 } = require('./github.js')
 const { MARKER, buildComment, parseRecords } = require('./comment.js')
 
+// GitHub Actions always provides GITHUB_API_URL; the transport tests below rely on it being set.
+if (!process.env.GITHUB_API_URL) process.env.GITHUB_API_URL = 'https://api.github.com'
+
 const recordA = {
   committed: true,
   sha: 'aaaaaaa',
@@ -43,9 +46,9 @@ function makeTestOps(comments = [], viewerLogin = 'scribe-bot') {
       return Promise.resolve(c)
     },
     update: (id, body) => {
-      const c = comments.find((c) => c.id === id)
-      c.body = body
-      return Promise.resolve(c)
+      const comment = comments.find((c) => c.id === id)
+      comment.body = body
+      return Promise.resolve(comment)
     },
     del: (id) => {
       const i = comments.findIndex((c) => c.id === id)
@@ -319,6 +322,24 @@ test('requestOptions uses GITHUB_API_URL including enterprise path prefix', () =
     const options = requestOptions('GET', '/repos/owner/repo/issues/7/comments', 'token')
     assert.equal(options.hostname, 'company.ghe.com')
     assert.equal(options.path, '/api/v3/repos/owner/repo/issues/7/comments')
+  } finally {
+    if (previous === undefined) delete process.env.GITHUB_API_URL
+    else process.env.GITHUB_API_URL = previous
+  }
+})
+
+test('requestOptions throws when GITHUB_API_URL is empty or unset', () => {
+  const previous = process.env.GITHUB_API_URL
+
+  try {
+    for (const value of [undefined, '']) {
+      if (value === undefined) delete process.env.GITHUB_API_URL
+      else process.env.GITHUB_API_URL = value
+      assert.throws(
+        () => requestOptions('GET', '/repos/owner/repo/issues/7/comments', 'token'),
+        /GITHUB_API_URL is not set/,
+      )
+    }
   } finally {
     if (previous === undefined) delete process.env.GITHUB_API_URL
     else process.env.GITHUB_API_URL = previous

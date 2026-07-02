@@ -47,7 +47,7 @@ jobs:
   update:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@<sha>
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
@@ -56,7 +56,7 @@ jobs:
         run: npm run generate
 
       - name: Commit generated files
-        uses: goeselt/scribe@v1
+        uses: goeselt/scribe@<sha>
         with:
           files: generated/
           message: 'chore: update generated files'
